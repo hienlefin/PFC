@@ -1,0 +1,43 @@
+﻿# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Secrets / keys / env
+.env
+.env.*
+!.env.example
+*.pem
+*_deploy_key
+*_deploy_key.pub
+id_rsa
+id_ed25519
+
+# Runtime / local data (never commit)
+BeeCount-Cloud/data/
+**/data/.jwt_secret
+
+# Dependencies / build
+node_modules/
+dist/
+build/
+.next/
+coverage/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Large binary downloads (optional local)
+releases/*.apk
+releases/*.ipa
+releases/*.aab
+
+# Temp
+**/_extracted/
+**/_*.txt
+
+# Incomplete / local exploration clones
+BeeCount/

@@ -1,0 +1,36 @@
+import { connectMongoDB, disconnectMongoDB } from "@/lib/mongodb";
+import User from "@/models/user";
+import { NextResponse } from "next/server";
+import { GetServerSidePropsContext } from 'next';
+import { getServerSession } from "next-auth/next"
+import { authOptions } from "../auth/[...nextauth]/route"
+import Task from "@/models/task";
+
+export async function POST(request: any, response: any) {
+    const session = await getServerSession(authOptions)
+    try {
+        if (session) {
+            // Signed in
+            console.log("Session", JSON.stringify(session, null))
+            const { assigner_id } = await request.json();
+            await connectMongoDB();
+            // const data = await User.findOne({ assigner_id });
+            // console.log("Data", data)
+            // await Task.create({ assigner_id, assigner_name, task_id, task_name, deadline, assignee_id, points  })
+            const tasks = await Task.find({ assigner_id, isCompleted: true, isApproved: false });
+            // await disconnectMongoDB()
+            return NextResponse.json(tasks, { status: 200 });
+
+        } else {
+            // Not Signed in
+            
+            return NextResponse.json({ message: "User not found" }, { status: 403 });
+        }
+
+    }
+    catch (e) {
+        console.log("error in task retrival for submitted tasks: ", e)
+        return NextResponse.json({ message: "Error in task retrival for submitted tasks" }, { status: 403 });
+    }
+    // return NextResponse.json({ message: "User not found" }, { status: 403 });
+}

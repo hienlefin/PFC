@@ -1,0 +1,31 @@
+﻿# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Secrets / keys
+.env
+.env.*
+!.env.example
+*.pem
+*_deploy_key
+*_deploy_key.pub
+id_rsa
+id_ed25519
+
+# Dependencies / build
+node_modules/
+dist/
+build/
+.next/
+coverage/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Temp extracts
+Requirements/_extracted/
+Requirements/_*.txt

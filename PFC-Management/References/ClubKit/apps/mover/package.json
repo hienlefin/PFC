@@ -1,0 +1,20 @@
+{
+  "name": "mover",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "move": "bun run --env-file=../../.env ./script.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bun-promptx": "^0.2.0",
+    "db": "workspace:*",
+    "nanoid": "^5.0.6",
+    "web": "workspace:^",
+    "zod": "^3.23.8"
+  }
+}
