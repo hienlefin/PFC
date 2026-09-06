@@ -53,16 +53,16 @@ Một task **chỉ DONE** khi đủ:
 
 | ID | Task | Checklist / FR | Done |
 |----|------|----------------|:----:|
-| CM-000 | Freeze glossary production: Community → Club/Group → Team; Activity ≠ Event | #008, FR-CLB | ☐ |
-| CM-001 | Freeze membership state machine + transition rules (server-enforced) | #254, FR-CLB-003 | ☐ |
-| CM-002 | Freeze role/ban matrix PFC (permissions theo action) | #255–#256, FR-CLB-002 | ☐ |
-| CM-003 | Freeze visibility policies: Open vs Private (+ approval) | #249–#252 | ☐ |
-| CM-004 | Freeze task state machine + who may transition | #267, FR-CLB-004 | ☐ |
-| CM-005 | ADR: Shared Event Engine; Club chỉ link; cấm Event CRUD trong Club | #277–#278, FR-CLB-010 | ☐ |
-| CM-006 | ADR: data classification cho membership/docs (internal/confidential) + retention | PDPA / SRS §14 | ☐ |
-| CM-007 | Freeze production launch scope Club (in/out) theo SRS — change control có ID | #004–#005 | ☐ |
-| CM-008 | Threat model Club: IDOR, privilege escalation, private leak, doc exfil | Security | ☐ |
-| CM-009 | Capacity assumptions Club (members/club, tasks, docs, concurrent ops) ghi vào NFR | SRS capacity | ☐ |
+| CM-000 | Freeze glossary production: Community → Club/Group → Team; Activity ≠ Event | #008, FR-CLB | ☑ |
+| CM-001 | Freeze membership state machine + transition rules (server-enforced) | #254, FR-CLB-003 | ☑ |
+| CM-002 | Freeze role/ban matrix PFC (permissions theo action) | #255–#256, FR-CLB-002 | ☑ |
+| CM-003 | Freeze visibility policies: Open vs Private (+ approval) | #249–#252 | ☑ |
+| CM-004 | Freeze task state machine + who may transition | #267, FR-CLB-004 | ☑ |
+| CM-005 | ADR: Shared Event Engine; Club chỉ link; cấm Event CRUD trong Club | #277–#278, FR-CLB-010 | ☑ |
+| CM-006 | ADR: data classification cho membership/docs (internal/confidential) + retention | PDPA / SRS §14 | ☑ |
+| CM-007 | Freeze production launch scope Club (in/out) theo SRS — change control có ID | #004–#005 | ☑ |
+| CM-008 | Threat model Club: IDOR, privilege escalation, private leak, doc exfil | Security | ☑ |
+| CM-009 | Capacity assumptions Club (members/club, tasks, docs, concurrent ops) ghi vào NFR | SRS capacity | ☑ |
 
 **Gate G0 exit:** mọi DEC/ADR merged; không tự bịa rule từ TBD.
 

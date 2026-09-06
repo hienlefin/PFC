@@ -41,3 +41,8 @@ releases/*.aab
 
 # Incomplete / local exploration clones
 BeeCount/
+
+# Club Management runtime
+PFC-Management/apps/club/.data/
+PFC-Management/apps/club/node_modules/
+PFC-Management/apps/club/.next/
