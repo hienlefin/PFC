@@ -1,0 +1,222 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+/// Demo Member — production sẽ map Platform member_id
+model Member {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  providerProfiles ProviderProfile[]
+  saves            OppSavedOpportunity[]
+  applications     OppApplication[]
+  reminderPrefs    OppReminderPreference?
+  reminderLogs     OppReminderLog[]
+  notifications    OppNotification[]
+}
+
+model ProviderProfile {
+  id                String              @id @default(cuid())
+  memberId          String
+  displayName       String
+  verificationTier ProviderTier        @default(UNVERIFIED)
+  status            String              @default("active")
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  member        Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  opportunities OppOpportunity[]
+
+  @@index([memberId])
+}
+
+model OppOpportunity {
+  id             String            @id @default(cuid())
+  providerId     String
+  type           OpportunityType
+  employmentType EmploymentType?
+  title          String
+  summary        String?
+  description    String
+  requirements   String?
+  benefits       String?
+  locationText   String?
+  workMode       WorkMode          @default(ONSITE)
+  deadlineAt     DateTime?
+  expireAt       DateTime?
+  applyMode      ApplyMode         @default(EXTERNAL)
+  externalUrl    String?
+  status         OpportunityStatus @default(DRAFT)
+  publishedAt    DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  provider     ProviderProfile       @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  saves        OppSavedOpportunity[]
+  applications OppApplication[]
+
+  @@index([status, deadlineAt])
+  @@index([providerId, status])
+  @@index([type, status, publishedAt])
+}
+
+model OppSavedOpportunity {
+  id            String   @id @default(cuid())
+  memberId      String
+  opportunityId String
+  createdAt     DateTime @default(now())
+
+  member      Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  opportunity OppOpportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, opportunityId])
+}
+
+model OppApplication {
+  id                String            @id @default(cuid())
+  memberId          String
+  opportunityId     String
+  channel           ApplyChannel
+  status            ApplicationStatus @default(REDIRECTED)
+  coverLetter       String?
+  resumeUrl         String?
+  outboundClickedAt DateTime?
+  idempotencyKey    String?           @unique
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  member      Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  opportunity OppOpportunity       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  history     OppApplicationEvent[]
+
+  @@index([memberId, createdAt])
+  @@index([opportunityId, status])
+}
+
+model OppApplicationEvent {
+  id            String   @id @default(cuid())
+  applicationId String
+  fromStatus    String?
+  toStatus      String
+  note          String?
+  createdAt     DateTime @default(now())
+
+  application OppApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId, createdAt])
+}
+
+/// ADR-004 dedupe: one reminder per member+opportunity+window
+model OppReminderLog {
+  id            String   @id @default(cuid())
+  memberId      String
+  opportunityId String
+  window        String
+  createdAt     DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, opportunityId, window])
+  @@index([createdAt])
+}
+
+model OppReminderPreference {
+  id       String  @id @default(cuid())
+  memberId String  @unique
+  enabled  Boolean @default(true)
+  inApp    Boolean @default(true)
+  email    Boolean @default(true)
+  push     Boolean @default(true)
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+model OppNotification {
+  id            String   @id @default(cuid())
+  memberId      String
+  opportunityId String?
+  title         String
+  body          String
+  deepLink      String?
+  readAt        DateTime?
+  createdAt     DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, createdAt])
+}
+
+model OppVerificationDecision {
+  id            String   @id @default(cuid())
+  opportunityId String
+  actorId       String
+  fromStatus    String
+  toStatus      String
+  reason        String?
+  createdAt     DateTime @default(now())
+
+  @@index([opportunityId, createdAt])
+}
+
+enum ProviderTier {
+  UNVERIFIED
+  VERIFIED_PROVIDER
+  TRUSTED_PARTNER
+}
+
+enum OpportunityType {
+  INTERNSHIP
+  JOB
+  COMPETITION
+  SCHOLARSHIP
+}
+
+enum EmploymentType {
+  CTV
+  PART_TIME
+  FULL_TIME
+}
+
+enum WorkMode {
+  ONSITE
+  REMOTE
+  HYBRID
+}
+
+enum ApplyMode {
+  INTERNAL
+  EXTERNAL
+  BOTH
+}
+
+enum OpportunityStatus {
+  DRAFT
+  PENDING
+  VERIFIED
+  REJECTED
+  EXPIRED
+}
+
+enum ApplyChannel {
+  INTERNAL
+  EXTERNAL
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+  REDIRECTED
+  CLOSED
+}

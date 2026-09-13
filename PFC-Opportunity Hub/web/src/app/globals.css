@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+:root {
+  --pfc-purple: #5d5fef;
+  --pfc-purple-dark: #4b49ac;
+  --pfc-purple-soft: #eef0ff;
+  --pfc-ink: #111827;
+  --pfc-muted: #6b7280;
+  --pfc-line: #e5e7eb;
+  --pfc-danger: #e11d48;
+  --pfc-amber: #d97706;
+  --background: #f7f8fc;
+  --foreground: var(--pfc-ink);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-pfc: var(--pfc-purple);
+  --color-pfc-dark: var(--pfc-purple-dark);
+  --color-pfc-soft: var(--pfc-purple-soft);
+  --font-sans: var(--font-geist-sans);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.pfc-phone {
+  max-width: 430px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  background: #fff;
+  position: relative;
+  box-shadow: 0 0 0 1px var(--pfc-line);
+}
+
+.pfc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: var(--pfc-purple);
+  color: #fff;
+  cursor: pointer;
+}
+
+.pfc-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.pfc-btn-outline {
+  background: #fff;
+  color: var(--pfc-purple);
+  border: 1.5px solid var(--pfc-purple);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--pfc-purple-soft);
+  color: var(--pfc-purple-dark);
+  border: 1px solid transparent;
+}
+
+.chip[data-active="true"] {
+  background: var(--pfc-purple);
+  color: #fff;
+}
