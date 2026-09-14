@@ -1,0 +1,10 @@
+# CM-100 / ADR-006 — Club Management ownership (module evidence pack)
+# GitHub applies CODEOWNERS from repo root, /docs, or /.github.
+# This file is the Club contract: @hienlefin owns this package.
+#
+# Same owner for (when a root CODEOWNERS is added by platform):
+#   PFC-Management/apps/club/
+#   PFC-Management/docs/adr/
+#   PFC-Management/Club_Management_TodoList.md
+
+* @hienlefin

@@ -223,9 +223,14 @@ export const auditEvents = sqliteTable(
     result: text("result").notNull().default("ok"),
     metaJson: text("meta_json"),
     correlationId: text("correlation_id"),
+    bypass: integer("bypass", { mode: "boolean" }).notNull().default(false),
     createdAt: ts("created_at"),
   },
-  (t) => [index("audit_club_idx").on(t.clubId)],
+  (t) => [
+    index("audit_club_idx").on(t.clubId),
+    index("audit_actor_idx").on(t.actorId),
+    index("audit_action_idx").on(t.action),
+  ],
 );
 
 export const idempotencyKeys = sqliteTable("idempotency_keys", {

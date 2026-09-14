@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { and, eq, desc } from "drizzle-orm";
-import { db } from "@/db";
+import { db, sqlite } from "@/db";
 import {
   clubs,
   memberships,
@@ -24,8 +24,8 @@ import {
 } from "@/domain/membership-fsm";
 import type { Position } from "@/domain/permissions";
 import { AppError } from "@/lib/errors";
-import { requireClubPermission, isActiveMember } from "@/lib/authz";
-import { writeAudit } from "@/lib/audit";
+import { requireClubPermission, requireSensitivePermission, isActiveMember } from "@/lib/authz";
+import { writeAudit, writeSensitiveAudit } from "@/lib/audit";
 import type { SessionUser } from "@/lib/auth";
 
 function slugify(name: string): string {
@@ -148,7 +148,8 @@ export function createTeam(
   return id;
 }
 
-export function listTeams(clubId: string) {
+export function listTeams(user: SessionUser, clubId: string) {
+  assertCanViewClub(user, clubId);
   return db.select().from(teams).where(eq(teams.clubId, clubId)).all();
 }
 
@@ -218,30 +219,45 @@ export function transitionMembership(
     .where(eq(memberships.id, membershipId))
     .all()[0];
   if (!m) throw new AppError("NOT_FOUND", "Membership not found", 404);
-  requireClubPermission(user, m.clubId, "approve_memberships");
-  assertMembershipTransition(m.status as MembershipStatus, to);
-  db.update(memberships)
-    .set({ status: to, updatedAt: new Date(), rejectReason: note ?? null })
-    .where(eq(memberships.id, membershipId))
-    .run();
-  db.insert(membershipHistory)
-    .values({
-      id: nanoid(),
-      membershipId,
-      fromStatus: m.status,
-      toStatus: to,
-      actorId: user.id,
-      note: note ?? null,
-    })
-    .run();
-  writeAudit({
-    clubId: m.clubId,
-    actorId: user.id,
+  const spec = {
     action: "membership.transition",
-    objectType: "membership",
-    objectId: membershipId,
-    meta: { from: m.status, to },
-  });
+    resourceType: "membership",
+    resourceId: membershipId,
+    metadata: { from: m.status, to },
+  };
+  const { bypass } = requireSensitivePermission(
+    user,
+    m.clubId,
+    "approve_memberships",
+    spec,
+  );
+  assertMembershipTransition(m.status as MembershipStatus, to);
+  sqlite.transaction(() => {
+    db.update(memberships)
+      .set({ status: to, updatedAt: new Date(), rejectReason: note ?? null })
+      .where(eq(memberships.id, membershipId))
+      .run();
+    db.insert(membershipHistory)
+      .values({
+        id: nanoid(),
+        membershipId,
+        fromStatus: m.status,
+        toStatus: to,
+        actorId: user.id,
+        note: note ?? null,
+      })
+      .run();
+    writeSensitiveAudit({
+      actorId: user.id,
+      action: spec.action,
+      resourceType: spec.resourceType,
+      resourceId: membershipId,
+      clubId: m.clubId,
+      result: "allow",
+      bypass,
+      metadata: spec.metadata,
+    });
+  })();
 }
 
 export function assignPosition(
@@ -255,19 +271,34 @@ export function assignPosition(
     .where(eq(memberships.id, membershipId))
     .all()[0];
   if (!m) throw new AppError("NOT_FOUND", "Membership not found", 404);
-  requireClubPermission(user, m.clubId, "manage_roles");
-  db.update(memberships)
-    .set({ position, updatedAt: new Date() })
-    .where(eq(memberships.id, membershipId))
-    .run();
-  writeAudit({
-    clubId: m.clubId,
-    actorId: user.id,
+  const spec = {
     action: "membership.assign_position",
-    objectType: "membership",
-    objectId: membershipId,
-    meta: { position },
-  });
+    resourceType: "membership",
+    resourceId: membershipId,
+    metadata: { from: m.position, to: position },
+  };
+  const { bypass } = requireSensitivePermission(
+    user,
+    m.clubId,
+    "manage_roles",
+    spec,
+  );
+  sqlite.transaction(() => {
+    db.update(memberships)
+      .set({ position, updatedAt: new Date() })
+      .where(eq(memberships.id, membershipId))
+      .run();
+    writeSensitiveAudit({
+      actorId: user.id,
+      action: spec.action,
+      resourceType: spec.resourceType,
+      resourceId: membershipId,
+      clubId: m.clubId,
+      result: "allow",
+      bypass,
+      metadata: spec.metadata,
+    });
+  })();
 }
 
 export function transitionClubStatus(
@@ -275,8 +306,19 @@ export function transitionClubStatus(
   clubId: string,
   to: "active" | "archived" | "disbanded",
 ) {
-  requireClubPermission(user, clubId, "manage_club");
   const club = getClubOrThrow(clubId);
+  const spec = {
+    action: "club.transition",
+    resourceType: "club",
+    resourceId: clubId,
+    metadata: { from: club.status, to },
+  };
+  const { bypass } = requireSensitivePermission(
+    user,
+    clubId,
+    "manage_club",
+    spec,
+  );
   if (!canTransitionClub(club.status as never, to)) {
     throw new AppError(
       "ILLEGAL_TRANSITION",
@@ -284,18 +326,22 @@ export function transitionClubStatus(
       422,
     );
   }
-  db.update(clubs)
-    .set({ status: to, updatedAt: new Date() })
-    .where(eq(clubs.id, clubId))
-    .run();
-  writeAudit({
-    clubId,
-    actorId: user.id,
-    action: "club.transition",
-    objectType: "club",
-    objectId: clubId,
-    meta: { from: club.status, to },
-  });
+  sqlite.transaction(() => {
+    db.update(clubs)
+      .set({ status: to, updatedAt: new Date() })
+      .where(eq(clubs.id, clubId))
+      .run();
+    writeSensitiveAudit({
+      actorId: user.id,
+      action: spec.action,
+      resourceType: spec.resourceType,
+      resourceId: clubId,
+      clubId,
+      result: "allow",
+      bypass,
+      metadata: spec.metadata,
+    });
+  })();
 }
 
 export function clubReport(user: SessionUser, clubId: string) {

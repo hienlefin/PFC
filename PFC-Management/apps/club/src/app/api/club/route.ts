@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { seedDemo } from "@/db/migrate";
 import { login, logout, requireSession, getSession, newCorrelationId } from "@/lib/auth";
 import { errorEnvelope, AppError } from "@/lib/errors";
+import { memberPermissions } from "@/lib/authz";
 import { withIdempotency } from "@/lib/audit";
 import * as clubs from "@/server/clubs";
 import * as tasks from "@/server/tasks";
@@ -57,17 +58,32 @@ export async function GET(req: Request) {
     clubs.assertCanViewClub(user, clubId);
 
     if (action === "home") {
+      const perms = memberPermissions(user, clubId);
       return NextResponse.json({
         ok: true,
         club: clubs.getClubOrThrow(clubId),
-        teams: clubs.listTeams(clubId),
-        report: clubs.clubReport(user, clubId),
-        members: clubs.listMembers(user, clubId),
-        kanban: tasks.kanbanBoard(user, clubId),
-        timeline: tasks.timelineTasks(user, clubId),
-        activities: ops.listActivities(user, clubId),
-        documents: ops.listDocuments(user, clubId),
-        links: ops.listLinkedEvents(user, clubId),
+        teams: clubs.listTeams(user, clubId),
+        report: perms.includes("view_reports")
+          ? clubs.clubReport(user, clubId)
+          : null,
+        members: perms.includes("view_members")
+          ? clubs.listMembers(user, clubId)
+          : [],
+        kanban: perms.includes("view_club")
+          ? tasks.kanbanBoard(user, clubId)
+          : {},
+        timeline: perms.includes("view_club")
+          ? tasks.timelineTasks(user, clubId)
+          : [],
+        activities: perms.includes("view_club")
+          ? ops.listActivities(user, clubId)
+          : [],
+        documents: perms.includes("view_club")
+          ? ops.listDocuments(user, clubId)
+          : [],
+        links: perms.includes("view_club")
+          ? ops.listLinkedEvents(user, clubId)
+          : [],
         correlationId,
       });
     }
@@ -77,7 +93,7 @@ export async function GET(req: Request) {
         return NextResponse.json({
           ok: true,
           club: clubs.getClubOrThrow(clubId),
-          teams: clubs.listTeams(clubId),
+          teams: clubs.listTeams(user, clubId),
           correlationId,
         });
       case "members":
@@ -265,6 +281,12 @@ export async function POST(req: Request) {
 }
 
 export async function PUT() {
-  const s = await getSession();
-  return NextResponse.json({ ok: true, authenticated: !!s });
+  const correlationId = newCorrelationId();
+  try {
+    const s = await getSession();
+    return NextResponse.json({ ok: true, authenticated: !!s, correlationId });
+  } catch (err) {
+    const e = errorEnvelope(err, correlationId);
+    return NextResponse.json(e, { status: e.status });
+  }
 }

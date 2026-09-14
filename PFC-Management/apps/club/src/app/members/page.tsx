@@ -1,7 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { AppHeader, StatusBar } from "@/components/MobileChrome";
+import { AppHeader } from "@/components/MobileChrome";
 import { useClubData } from "@/components/useClubData";
 
 const POSITION_LABEL: Record<string, string> = {
@@ -13,13 +14,20 @@ const POSITION_LABEL: Record<string, string> = {
   member: "Thành viên",
 };
 
+type Filter = "all" | "active" | "pending";
+
 export default function MembersPage() {
   const { data, error, post } = useClubData();
+  const [filter, setFilter] = useState<Filter>("all");
+  const [openId, setOpenId] = useState<string | null>(null);
   const members = data?.members ?? [];
+  const shown = useMemo(() => {
+    if (filter === "all") return members;
+    return members.filter((m) => m.status === filter);
+  }, [members, filter]);
 
   return (
     <>
-      <StatusBar />
       <AppHeader title="Thành viên" />
       {error && (
         <div className="error-banner">
@@ -31,44 +39,80 @@ export default function MembersPage() {
       )}
 
       <div className="chips">
-        <span className="chip active">Tất cả ({members.length})</span>
-        <span className="chip">
+        <button
+          type="button"
+          className={`chip${filter === "all" ? " active" : ""}`}
+          onClick={() => setFilter("all")}
+        >
+          Tất cả ({members.length})
+        </button>
+        <button
+          type="button"
+          className={`chip${filter === "active" ? " active" : ""}`}
+          onClick={() => setFilter("active")}
+        >
           Đang hoạt động ({members.filter((m) => m.status === "active").length})
-        </span>
-        <span className="chip">
+        </button>
+        <button
+          type="button"
+          className={`chip${filter === "pending" ? " active" : ""}`}
+          onClick={() => setFilter("pending")}
+        >
           Chờ duyệt ({members.filter((m) => m.status === "pending").length})
-        </span>
+        </button>
       </div>
 
       <section className="section">
-        {members.map((m) => (
+        {shown.map((m) => (
           <div key={m.id} className="list-row">
-            <div className="avatar">
-              {(m.fullName ?? m.email ?? "?")
-                .split(" ")
-                .slice(-2)
-                .map((p) => p[0])
-                .join("")
-                .slice(0, 2)
-                .toUpperCase()}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>
-                {m.fullName ?? m.email ?? m.memberId}
+            <button
+              type="button"
+              className="list-row-btn"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                flex: 1,
+                minWidth: 0,
+                background: "transparent",
+                border: "none",
+                padding: 0,
+              }}
+              onClick={() => setOpenId(openId === m.id ? null : m.id)}
+            >
+              <div className="avatar">
+                {(m.fullName ?? m.email ?? "?")
+                  .split(" ")
+                  .slice(-2)
+                  .map((p) => p[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase()}
               </div>
-              <div className="muted">
-                {POSITION_LABEL[m.position] ?? m.position}
+              <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>
+                  {m.fullName ?? m.email ?? m.memberId}
+                </div>
+                <div className="muted">
+                  {POSITION_LABEL[m.position] ?? m.position}
+                </div>
+                {openId === m.id && (
+                  <div className="muted" style={{ marginTop: 6 }}>
+                    {m.email ?? m.memberId}
+                  </div>
+                )}
               </div>
-            </div>
-            <span className={`badge${m.status === "pending" ? " warn" : " ok"}`}>
-              {m.status === "pending"
-                ? "Chờ duyệt"
-                : m.status === "active"
-                  ? "Hoạt động"
-                  : m.status}
-            </span>
+              <span className={`badge${m.status === "pending" ? " warn" : " ok"}`}>
+                {m.status === "pending"
+                  ? "Chờ duyệt"
+                  : m.status === "active"
+                    ? "Hoạt động"
+                    : m.status}
+              </span>
+            </button>
             {m.status === "pending" && (
               <button
+                type="button"
                 className="btn-ghost"
                 onClick={() =>
                   post({
@@ -83,7 +127,7 @@ export default function MembersPage() {
             )}
           </div>
         ))}
-        {!members.length && <p className="muted">Chưa có thành viên.</p>}
+        {!shown.length && <p className="muted">Chưa có thành viên.</p>}
       </section>
     </>
   );

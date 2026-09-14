@@ -9,6 +9,8 @@
     "lint": "next lint",
     "test": "vitest run",
     "test:watch": "vitest",
+    "db:migrate": "tsx scripts/migrate-up.ts",
+    "db:migrate:down": "tsx scripts/migrate-down.ts",
     "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {

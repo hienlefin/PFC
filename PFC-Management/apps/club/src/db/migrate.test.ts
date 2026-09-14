@@ -1,0 +1,80 @@
+import { describe, expect, it } from "vitest";
+import { db, sqlite } from "./index";
+import { members, tasks } from "./schema";
+import { seedDemo } from "./migrate";
+import {
+  appliedMigrationVersions,
+  migrateDown,
+  migrateUp,
+} from "./migrator";
+
+function indexNames(): Set<string> {
+  const rows = sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'index' AND name IS NOT NULL",
+    )
+    .all() as { name: string }[];
+  return new Set(rows.map((r) => r.name));
+}
+
+function tableNames(): Set<string> {
+  const rows = sqlite
+    .prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'",
+    )
+    .all() as { name: string }[];
+  return new Set(rows.map((r) => r.name));
+}
+
+function hasColumn(table: string, column: string): boolean {
+  const rows = sqlite.prepare(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+  }[];
+  return rows.some((r) => r.name === column);
+}
+
+describe("CM-101 versioned migrate up/down", () => {
+  it("up → seed → down one step preserves rows, no FK orphans, up restores 0003", async () => {
+    migrateUp();
+    expect(appliedMigrationVersions()).toEqual([
+      "0001_init_club",
+      "0002_secondary_indexes",
+      "0003_audit_sensitive",
+    ]);
+    expect(indexNames().has("tasks_deadline_idx")).toBe(true);
+    expect(hasColumn("audit_events", "bypass")).toBe(true);
+
+    await seedDemo();
+    const seededMembers = db.select().from(members).all();
+    const seededTasks = db.select().from(tasks).all();
+    expect(seededMembers.length).toBeGreaterThanOrEqual(2);
+    expect(seededTasks.length).toBeGreaterThanOrEqual(1);
+    const memberIds = seededMembers.map((m) => m.id);
+
+    const rolled = migrateDown();
+    expect(rolled).toBe("0003_audit_sensitive");
+    expect(appliedMigrationVersions()).toEqual([
+      "0001_init_club",
+      "0002_secondary_indexes",
+    ]);
+    expect(hasColumn("audit_events", "bypass")).toBe(false);
+    expect(indexNames().has("tasks_deadline_idx")).toBe(true);
+    expect(tableNames().has("members")).toBe(true);
+
+    const afterDownMembers = db.select().from(members).all();
+    const afterDownTasks = db.select().from(tasks).all();
+    expect(afterDownMembers.map((m) => m.id)).toEqual(memberIds);
+    expect(afterDownTasks.map((t) => t.id)).toEqual(seededTasks.map((t) => t.id));
+    expect(sqlite.pragma("foreign_key_check") as unknown[]).toEqual([]);
+
+    migrateUp();
+    expect(appliedMigrationVersions()).toEqual([
+      "0001_init_club",
+      "0002_secondary_indexes",
+      "0003_audit_sensitive",
+    ]);
+    expect(hasColumn("audit_events", "bypass")).toBe(true);
+    expect(db.select().from(members).all().map((m) => m.id)).toEqual(memberIds);
+    expect(sqlite.pragma("foreign_key_check") as unknown[]).toEqual([]);
+  });
+});

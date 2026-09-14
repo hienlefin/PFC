@@ -58,15 +58,6 @@ export function BottomNav() {
   );
 }
 
-export function StatusBar() {
-  return (
-    <div className="status-bar">
-      <span>9:41</span>
-      <span>●●● Wi‑Fi 🔋</span>
-    </div>
-  );
-}
-
 export function AppHeader({
   title,
   showSearch = false,
@@ -80,13 +71,15 @@ export function AppHeader({
         <PfcLogo />
       </Link>
       {showSearch ? (
-        <div className="search-pill">🔍 Tìm kiếm trong CLB...</div>
+        <Link href="/members" className="search-pill" aria-label="Tìm thành viên">
+          🔍 Tìm kiếm trong CLB...
+        </Link>
       ) : (
         <h1>{title}</h1>
       )}
-      <button type="button" className="icon-btn" aria-label="Thông báo">
+      <Link href="/manage#thong-bao" className="icon-btn" aria-label="Thông báo">
         🔔
-      </button>
+      </Link>
     </div>
   );
 }

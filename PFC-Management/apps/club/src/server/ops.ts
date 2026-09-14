@@ -1,10 +1,10 @@
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, sqlite } from "@/db";
 import { activities, documents, clubEventLinks } from "@/db/schema";
 import { AppError } from "@/lib/errors";
-import { requireClubPermission } from "@/lib/authz";
-import { writeAudit } from "@/lib/audit";
+import { requireClubPermission, requireSensitivePermission } from "@/lib/authz";
+import { writeAudit, writeSensitiveAudit } from "@/lib/audit";
 import type { SessionUser } from "@/lib/auth";
 
 export function listActivities(user: SessionUser, clubId: string) {
@@ -81,18 +81,33 @@ export function registerDocumentMeta(
 export function softDeleteDocument(user: SessionUser, documentId: string) {
   const doc = db.select().from(documents).where(eq(documents.id, documentId)).all()[0];
   if (!doc) throw new AppError("NOT_FOUND", "Document not found", 404);
-  requireClubPermission(user, doc.clubId, "manage_documents");
-  db.update(documents)
-    .set({ deletedAt: new Date() })
-    .where(eq(documents.id, documentId))
-    .run();
-  writeAudit({
-    clubId: doc.clubId,
-    actorId: user.id,
+  const spec = {
     action: "document.soft_delete",
-    objectType: "document",
-    objectId: documentId,
-  });
+    resourceType: "document",
+    resourceId: documentId,
+  };
+  const { bypass } = requireSensitivePermission(
+    user,
+    doc.clubId,
+    "manage_documents",
+    spec,
+  );
+  sqlite.transaction(() => {
+    db.update(documents)
+      .set({ deletedAt: new Date() })
+      .where(eq(documents.id, documentId))
+      .run();
+    writeSensitiveAudit({
+      actorId: user.id,
+      action: spec.action,
+      resourceType: spec.resourceType,
+      resourceId: documentId,
+      clubId: doc.clubId,
+      result: "allow",
+      bypass,
+      metadata: {},
+    });
+  })();
 }
 
 /** FR-CLB-010 — link only, no Event payload */

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AppHeader, StatusBar } from "@/components/MobileChrome";
+import { AppHeader } from "@/components/MobileChrome";
 import { useClubData } from "@/components/useClubData";
 
 export default function HomePage() {
@@ -9,7 +9,6 @@ export default function HomePage() {
 
   return (
     <>
-      <StatusBar />
       <AppHeader showSearch />
       {error && (
         <div className="error-banner">
@@ -28,7 +27,7 @@ export default function HomePage() {
         </h2>
         <p>
           {data?.club.name ?? "PFC — Personal Finance Club"} ·{" "}
-          {data?.report.members.active ?? "—"} thành viên
+          {data?.report?.members.active ?? "—"} thành viên
         </p>
         <Link href="/members" className="btn-primary">
           Xem thành viên
@@ -59,22 +58,22 @@ export default function HomePage() {
         {loading && <p className="muted">Đang tải...</p>}
         {data && (
           <div className="stat-grid">
-            <div className="stat-card">
+            <Link href="/members" className="stat-card">
               <div className="label">Thành viên</div>
-              <div className="value">{data.report.members.active}</div>
-            </div>
-            <div className="stat-card">
+              <div className="value">{data.report?.members.active ?? "—"}</div>
+            </Link>
+            <Link href="/tasks" className="stat-card">
               <div className="label">Công việc</div>
-              <div className="value">{data.report.tasks.total}</div>
-            </div>
-            <div className="stat-card">
+              <div className="value">{data.report?.tasks.total ?? "—"}</div>
+            </Link>
+            <Link href="/events#hoat-dong" className="stat-card">
               <div className="label">Hoạt động</div>
-              <div className="value">{data.report.activities}</div>
-            </div>
-            <div className="stat-card">
+              <div className="value">{data.report?.activities ?? "—"}</div>
+            </Link>
+            <Link href="/events" className="stat-card">
               <div className="label">Sự kiện</div>
-              <div className="value">{data.report.linkedEvents}</div>
-            </div>
+              <div className="value">{data.report?.linkedEvents ?? "—"}</div>
+            </Link>
           </div>
         )}
       </section>

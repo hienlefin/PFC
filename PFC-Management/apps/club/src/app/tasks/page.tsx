@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AppHeader, StatusBar } from "@/components/MobileChrome";
+import { AppHeader } from "@/components/MobileChrome";
 import { useClubData } from "@/components/useClubData";
 
 const COL_LABEL: Record<string, string> = {
@@ -17,6 +17,7 @@ export default function TasksPage() {
   const { data, error, post } = useClubData();
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<"board" | "timeline">("board");
+  const [openTask, setOpenTask] = useState<string | null>(null);
   const kanban = data?.kanban ?? {};
 
   async function addTask(e: React.FormEvent) {
@@ -27,7 +28,6 @@ export default function TasksPage() {
 
   return (
     <>
-      <StatusBar />
       <AppHeader title="Công việc" />
       {error && (
         <div className="error-banner">
@@ -85,10 +85,18 @@ export default function TasksPage() {
               </h4>
               {items.map((t) => (
                 <div key={t.id} className="task-card">
-                  <div style={{ fontWeight: 700, fontSize: 13 }}>{t.title}</div>
-                  <div className="muted" style={{ marginTop: 4 }}>
-                    {t.priority}
-                  </div>
+                  <button
+                    type="button"
+                    className="list-row-btn"
+                    style={{ background: "transparent", border: "none", padding: 0 }}
+                    onClick={() => setOpenTask(openTask === t.id ? null : t.id)}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{t.title}</div>
+                    <div className="muted" style={{ marginTop: 4 }}>
+                      {t.priority}
+                      {openTask === t.id ? " · nhấn cột để chuyển trạng thái" : ""}
+                    </div>
+                  </button>
                   <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {col === "backlog" && (
                       <button className="btn-ghost" onClick={() => post({ action: "task_transition", taskId: t.id, to: "todo" })}>
@@ -119,9 +127,14 @@ export default function TasksPage() {
       ) : (
         <section className="section">
           {(data?.timeline ?? []).map((t) => (
-            <div key={t.id} className="list-row">
+            <button
+              type="button"
+              key={t.id}
+              className="list-row list-row-btn"
+              onClick={() => setMode("board")}
+            >
               <div className="avatar">📅</div>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, textAlign: "left" }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{t.title}</div>
                 <div className="muted">
                   {t.status} ·{" "}
@@ -130,7 +143,7 @@ export default function TasksPage() {
                     : "Chưa có hạn"}
                 </div>
               </div>
-            </div>
+            </button>
           ))}
           {!data?.timeline?.length && (
             <p className="muted">Chưa có task có deadline.</p>

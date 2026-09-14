@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { eq } from "drizzle-orm";
-import { db } from "@/db";
+import { db, sqlite } from "@/db";
 import { tasks, taskChecklistItems } from "@/db/schema";
 import {
   assertTaskTransition,
@@ -8,8 +8,8 @@ import {
   type TaskStatus,
 } from "@/domain/task-fsm";
 import { AppError } from "@/lib/errors";
-import { requireClubPermission } from "@/lib/authz";
-import { writeAudit } from "@/lib/audit";
+import { requireClubPermission, requireSensitivePermission } from "@/lib/authz";
+import { writeAudit, writeSensitiveAudit } from "@/lib/audit";
 import type { SessionUser } from "@/lib/auth";
 
 export function listTasks(user: SessionUser, clubId: string) {
@@ -78,36 +78,52 @@ export function transitionTask(
   const task = db.select().from(tasks).where(eq(tasks.id, taskId)).all()[0];
   if (!task) throw new AppError("NOT_FOUND", "Task not found", 404);
 
+  const spec = {
+    action: "task.transition",
+    resourceType: "task",
+    resourceId: taskId,
+    metadata: { from: task.status, to },
+  };
+
+  // Object-level: always membership on the task's club first (no assignee skip).
+  const first = requireSensitivePermission(user, task.clubId, "view_club", spec);
+
   const from = task.status as TaskStatus;
   assertTaskTransition(from, to);
 
-  // Assignee can move own work toward review; leaders review/cancel
   const isAssignee = task.assigneeId === user.id;
+  let bypass = first.bypass;
   if (to === "done" || to === "cancelled" || (from === "review" && to === "in_progress")) {
-    requireClubPermission(user, task.clubId, "review_tasks");
+    bypass = requireSensitivePermission(user, task.clubId, "review_tasks", spec).bypass;
   } else if (to === "review") {
-    if (!isAssignee) requireClubPermission(user, task.clubId, "manage_tasks");
+    if (!isAssignee) {
+      bypass = requireSensitivePermission(user, task.clubId, "manage_tasks", spec).bypass;
+    }
   } else {
-    requireClubPermission(user, task.clubId, "manage_tasks");
+    bypass = requireSensitivePermission(user, task.clubId, "manage_tasks", spec).bypass;
   }
 
-  db.update(tasks)
-    .set({
-      status: to,
-      proofOfWork: proofOfWork ?? task.proofOfWork,
-      updatedAt: new Date(),
-    })
-    .where(eq(tasks.id, taskId))
-    .run();
+  sqlite.transaction(() => {
+    db.update(tasks)
+      .set({
+        status: to,
+        proofOfWork: proofOfWork ?? task.proofOfWork,
+        updatedAt: new Date(),
+      })
+      .where(eq(tasks.id, taskId))
+      .run();
 
-  writeAudit({
-    clubId: task.clubId,
-    actorId: user.id,
-    action: "task.transition",
-    objectType: "task",
-    objectId: taskId,
-    meta: { from, to },
-  });
+    writeSensitiveAudit({
+      actorId: user.id,
+      action: spec.action,
+      resourceType: spec.resourceType,
+      resourceId: taskId,
+      clubId: task.clubId,
+      result: "allow",
+      bypass,
+      metadata: spec.metadata,
+    });
+  })();
 }
 
 export function addChecklistItem(

@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AppHeader, StatusBar, PfcLogo } from "@/components/MobileChrome";
+import { AppHeader, PfcLogo } from "@/components/MobileChrome";
 import { useClubData } from "@/components/useClubData";
 
 export default function ManagePage() {
@@ -22,7 +23,6 @@ export default function ManagePage() {
 
   return (
     <>
-      <StatusBar />
       <AppHeader title="Quản lý câu lạc bộ" />
       {error && (
         <div className="error-banner">
@@ -51,7 +51,9 @@ export default function ManagePage() {
         </div>
 
         <div className="chips" style={{ paddingLeft: 0, paddingRight: 0 }}>
-          <span className="chip active">Tổng quan</span>
+          <a href="#thong-ke" className="chip active">
+            Tổng quan
+          </a>
           <Link href="/members" className="chip">
             Thành viên
           </Link>
@@ -64,23 +66,23 @@ export default function ManagePage() {
         </div>
 
         {report && (
-          <div className="stat-grid" style={{ marginBottom: 14 }}>
-            <div className="stat-card">
+          <div className="stat-grid" style={{ marginBottom: 14 }} id="thong-ke">
+            <Link href="/members" className="stat-card">
               <div className="label">Thành viên</div>
               <div className="value">{report.members.total}</div>
-            </div>
-            <div className="stat-card">
+            </Link>
+            <Link href="/tasks" className="stat-card">
               <div className="label">Công việc</div>
               <div className="value">{report.tasks.total}</div>
-            </div>
-            <div className="stat-card">
+            </Link>
+            <Link href="/events#hoat-dong" className="stat-card">
               <div className="label">Hoạt động</div>
               <div className="value">{report.activities}</div>
-            </div>
-            <div className="stat-card">
+            </Link>
+            <a href="#tai-lieu" className="stat-card">
               <div className="label">Tài liệu</div>
               <div className="value">{report.documents}</div>
-            </div>
+            </a>
           </div>
         )}
 
@@ -96,18 +98,18 @@ export default function ManagePage() {
           <Link href="/tasks" className="menu-item">
             <span className="icon">🗂️</span> Quản lý công việc
           </Link>
-          <div className="menu-item">
+          <a href="#tai-lieu" className="menu-item">
             <span className="icon">📄</span> Tài liệu nội bộ
             <span className="muted" style={{ marginLeft: "auto" }}>
               {report?.documents ?? 0}
             </span>
-          </div>
-          <div className="menu-item">
+          </a>
+          <a href="#thong-bao" className="menu-item">
             <span className="icon">🔔</span> Thông báo CLB
-          </div>
-          <div className="menu-item">
+          </a>
+          <a href="#thong-ke" className="menu-item">
             <span className="icon">📈</span> Thống kê hoạt động
-          </div>
+          </a>
           <button
             type="button"
             className="menu-item"
@@ -125,12 +127,14 @@ export default function ManagePage() {
           </button>
         </div>
 
-        {(data?.documents ?? []).map((d) => (
-          <div key={d.id} className="list-row" style={{ marginTop: 10 }}>
-            <div className="avatar">📎</div>
-            <div style={{ fontWeight: 600, fontSize: 13 }}>{d.title}</div>
-          </div>
-        ))}
+        <div id="thong-bao" className="card" style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>Thông báo CLB</div>
+          <p className="muted" style={{ margin: 0 }}>
+            Chuông trên header dẫn tới đây. Kênh notify đầy đủ thuộc CM-601.
+          </p>
+        </div>
+
+        <DocumentsList documents={data?.documents ?? []} />
 
         <button
           type="button"
@@ -142,5 +146,37 @@ export default function ManagePage() {
         </button>
       </section>
     </>
+  );
+}
+
+function DocumentsList({
+  documents,
+}: {
+  documents: { id: string; title: string }[];
+}) {
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  return (
+    <div id="tai-lieu">
+      {documents.map((d) => (
+        <button
+          type="button"
+          key={d.id}
+          className="list-row list-row-btn"
+          style={{ marginTop: 10, width: "100%" }}
+          onClick={() => setOpenId(openId === d.id ? null : d.id)}
+        >
+          <div className="avatar">📎</div>
+          <div style={{ fontWeight: 600, fontSize: 13, textAlign: "left" }}>
+            {d.title}
+            {openId === d.id && (
+              <div className="muted" style={{ marginTop: 4, fontWeight: 500 }}>
+                Tài liệu nội bộ CLB — xem/xóa đầy đủ thuộc CM-500.
+              </div>
+            )}
+          </div>
+        </button>
+      ))}
+    </div>
   );
 }

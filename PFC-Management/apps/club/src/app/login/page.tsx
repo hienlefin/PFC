@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { StatusBar } from "@/components/MobileChrome";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,7 +34,6 @@ export default function LoginPage() {
 
   return (
     <>
-      <StatusBar />
       <div style={{ padding: "28px 20px" }}>
         <Link href="/" aria-label="Về trang chủ">
           <Image

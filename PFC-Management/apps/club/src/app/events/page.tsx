@@ -1,17 +1,23 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { AppHeader, StatusBar } from "@/components/MobileChrome";
+import { AppHeader } from "@/components/MobileChrome";
 import { useClubData } from "@/components/useClubData";
+
+type Chip = "upcoming" | "online" | "offline";
 
 export default function EventsPage() {
   const { data, error } = useClubData();
+  const [chip, setChip] = useState<Chip>("upcoming");
+  const [openLink, setOpenLink] = useState<string | null>(null);
+  const [openActivity, setOpenActivity] = useState<string | null>(null);
   const links = data?.links ?? [];
   const activities = data?.activities ?? [];
+  const visibleLinks = chip === "upcoming" ? links : [];
 
   return (
     <>
-      <StatusBar />
       <AppHeader title="Sự kiện" />
       {error && (
         <div className="error-banner">
@@ -23,9 +29,27 @@ export default function EventsPage() {
       )}
 
       <div className="chips">
-        <span className="chip active">Sắp tới</span>
-        <span className="chip">Online</span>
-        <span className="chip">Offline</span>
+        <button
+          type="button"
+          className={`chip${chip === "upcoming" ? " active" : ""}`}
+          onClick={() => setChip("upcoming")}
+        >
+          Sắp tới
+        </button>
+        <button
+          type="button"
+          className={`chip${chip === "online" ? " active" : ""}`}
+          onClick={() => setChip("online")}
+        >
+          Online
+        </button>
+        <button
+          type="button"
+          className={`chip${chip === "offline" ? " active" : ""}`}
+          onClick={() => setChip("offline")}
+        >
+          Offline
+        </button>
       </div>
 
       <section className="section">
@@ -35,15 +59,13 @@ export default function EventsPage() {
         <p className="muted" style={{ marginBottom: 10 }}>
           Event thuộc Shared Event Engine — CLB chỉ liên kết (FR-CLB-010)
         </p>
-        {links.map((l) => (
+        {visibleLinks.map((l) => (
           <div key={l.id} className="card">
-            <div
-              style={{
-                height: 120,
-                borderRadius: 12,
-                background: "linear-gradient(135deg,#ebe6f6,#9281c7)",
-                marginBottom: 10,
-              }}
+            <button
+              type="button"
+              className="figure-btn"
+              aria-label={l.label ?? "Sự kiện PFC"}
+              onClick={() => setOpenLink(openLink === l.id ? null : l.id)}
             />
             <div style={{ fontWeight: 750, fontSize: 15 }}>
               {l.label ?? "Sự kiện PFC"}
@@ -51,26 +73,53 @@ export default function EventsPage() {
             <div className="muted" style={{ marginTop: 4 }}>
               ID: {l.externalEventId}
             </div>
-            <button className="btn-primary solid" style={{ marginTop: 12 }}>
-              Xem chi tiết
+            <button
+              type="button"
+              className="btn-primary solid"
+              style={{ marginTop: 12 }}
+              onClick={() => setOpenLink(openLink === l.id ? null : l.id)}
+            >
+              {openLink === l.id ? "Thu gọn" : "Xem chi tiết"}
             </button>
+            {openLink === l.id && (
+              <p className="muted" style={{ marginTop: 10 }}>
+                Đăng ký / vé do Shared Event Engine xử lý. Mã liên kết:{" "}
+                {l.externalEventId}
+              </p>
+            )}
           </div>
         ))}
-        {!links.length && <p className="muted">Chưa có sự kiện liên kết.</p>}
+        {!visibleLinks.length && (
+          <p className="muted">
+            {chip === "upcoming"
+              ? "Chưa có sự kiện liên kết."
+              : "Chưa có sự kiện cho bộ lọc này (CLB chỉ lưu mã liên kết)."}
+          </p>
+        )}
       </section>
 
-      <section className="section">
+      <section className="section" id="hoat-dong">
         <div className="section-title">
           <h3>Hoạt động nội bộ</h3>
         </div>
         {activities.map((a) => (
-          <div key={a.id} className="list-row">
+          <button
+            type="button"
+            key={a.id}
+            className="list-row list-row-btn"
+            onClick={() => setOpenActivity(openActivity === a.id ? null : a.id)}
+          >
             <div className="avatar">🎯</div>
-            <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, textAlign: "left" }}>
               <div style={{ fontWeight: 700, fontSize: 14 }}>{a.title}</div>
               <div className="muted">{a.status}</div>
+              {openActivity === a.id && (
+                <div className="muted" style={{ marginTop: 6 }}>
+                  Hoạt động nội bộ CLB (không phải Event).
+                </div>
+              )}
             </div>
-          </div>
+          </button>
         ))}
       </section>
     </>
