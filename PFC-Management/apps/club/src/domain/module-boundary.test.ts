@@ -10,6 +10,8 @@ import {
   TRACEABILITY,
   domainImportIsForbidden,
   importSpecifierIsForbidden,
+  isLibsqlSpecifier,
+  libsqlImportIsAllowedInFile,
 } from "./module-boundary";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -91,6 +93,12 @@ describe("CM-100 forbidden imports", () => {
         if (importSpecifierIsForbidden(spec)) {
           violations.push(`${path.relative(SRC_ROOT, file)} → ${spec}`);
         }
+        if (isLibsqlSpecifier(spec)) {
+          const rel = path.relative(SRC_ROOT, file).replaceAll("\\", "/");
+          if (!libsqlImportIsAllowedInFile(rel)) {
+            violations.push(`${rel} → ${spec} (libSQL only in src/db/)`);
+          }
+        }
       }
     }
     expect(violations).toEqual([]);
@@ -152,6 +160,9 @@ describe("CM-100 classifier helpers", () => {
       true,
     );
     expect(importSpecifierIsForbidden("@/server/clubs")).toBe(false);
+    expect(isLibsqlSpecifier("@libsql/client")).toBe(true);
+    expect(libsqlImportIsAllowedInFile("db/turso-client.ts")).toBe(true);
+    expect(libsqlImportIsAllowedInFile("server/clubs.ts")).toBe(false);
   });
 
   it("flags domain Next/DB specifiers", () => {

@@ -1,6 +1,6 @@
 /**
  * Club module boundary — CM-100 / ADR-006.
- * Trace: FR-CLB-010 (Event = link only), ADR-001/003/004/005.
+ * Trace: FR-CLB-010 (Event = link only), ADR-001/003/004/005/007.
  * Pure catalog (no Next/DB). Enforcement: tests + ESLint.
  */
 
@@ -27,7 +27,6 @@ export const FORBIDDEN_IMPORT_SUBSTRINGS = [
   "/Marketplace/",
   "marketplace/",
   "@clerk/",
-  "@libsql/",
   "vnpay",
   "shared-event-engine",
   "event-engine/",
@@ -36,8 +35,10 @@ export const FORBIDDEN_IMPORT_SUBSTRINGS = [
 export const FORBIDDEN_PACKAGE_NAMES = [
   "@clerk/nextjs",
   "@clerk/backend",
-  "@libsql/client",
 ] as const;
+
+/** libSQL / Turso driver only (ADR-007). Not allowed in domain/ or UI/use-case. */
+export const LIBSQL_IMPORT_SUBSTRINGS = ["@libsql/", "libsql"] as const;
 
 /** domain/ must stay FSM/policy-only (modular-srp + CM-100). */
 export const DOMAIN_FORBIDDEN_IMPORT_SUBSTRINGS = [
@@ -46,6 +47,8 @@ export const DOMAIN_FORBIDDEN_IMPORT_SUBSTRINGS = [
   "drizzle-orm",
   "@/db",
   "better-sqlite3",
+  "@libsql/",
+  "libsql",
 ] as const;
 
 /** Club DB must not own Event/Payment entities (ADR-001, FR-CLB-010). */
@@ -65,6 +68,20 @@ export function importSpecifierIsForbidden(specifier: string): boolean {
     return true;
   }
   return FORBIDDEN_IMPORT_SUBSTRINGS.some((frag) => trimmed.includes(frag));
+}
+
+export function isLibsqlSpecifier(specifier: string): boolean {
+  const trimmed = specifier.trim();
+  return (
+    trimmed === "libsql" ||
+    trimmed.startsWith("libsql/") ||
+    trimmed.startsWith("@libsql/")
+  );
+}
+
+/** ADR-007: `@libsql/client` / `libsql` only under src/db/. */
+export function libsqlImportIsAllowedInFile(srcRelativePosix: string): boolean {
+  return srcRelativePosix.startsWith("db/");
 }
 
 export function domainImportIsForbidden(specifier: string): boolean {

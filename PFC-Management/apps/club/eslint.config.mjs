@@ -13,6 +13,7 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/db/**"],
     rules: {
       "no-restricted-imports": [
         "error",
@@ -22,15 +23,16 @@ const eslintConfig = [
               name: "@clerk/nextjs",
               message: "CM-100/ADR-004: local auth, no Clerk.",
             },
-            {
-              name: "@libsql/client",
-              message: "CM-100/ADR-004: Drizzle/SQLite, no Turso.",
-            },
           ],
           patterns: [
             {
-              group: ["@clerk/*", "@libsql/*"],
+              group: ["@clerk/*"],
               message: "CM-100: forbidden platform import.",
+            },
+            {
+              group: ["@libsql/*", "libsql"],
+              message:
+                "ADR-007: libSQL/Turso only from src/db/ (driver). Do not import from UI or use-cases.",
             },
             {
               group: [
@@ -66,7 +68,14 @@ const eslintConfig = [
           ],
           patterns: [
             {
-              group: ["next/*", "@/db", "@/db/*", "better-sqlite3"],
+              group: [
+                "next/*",
+                "@/db",
+                "@/db/*",
+                "better-sqlite3",
+                "@libsql/*",
+                "libsql",
+              ],
               message: "CM-100: domain/ must not import Next or DB.",
             },
           ],

@@ -9,7 +9,6 @@ import {
   memberships,
   tasks,
   documents,
-  auditEvents,
 } from "@/db/schema";
 import { AppError } from "@/lib/errors";
 import type { SessionUser } from "@/lib/auth";

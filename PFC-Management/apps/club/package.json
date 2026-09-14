@@ -14,9 +14,11 @@
     "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@libsql/client": "^0.18.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",
+    "libsql": "^0.5.29",
     "nanoid": "^6.0.1",
     "next": "^15.5.2",
     "react": "^19.0.0",
