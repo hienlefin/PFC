@@ -7,7 +7,7 @@ Production Club Management module for **Personal Finance / PFC Digital Hub**.
 Owned paths: this package, `../../docs/adr/`, `../../Club_Management_TodoList.md` (`CODEOWNERS` → `@hienlefin`).
 
 - `src/domain/` is pure FSM/policy (no Next, Drizzle, `@/db`).
-- Do not import BeeCount, Opportunity Hub, Marketplace, Clerk, Turso, or Shared Event engine internals.
+- Do not import BeeCount, Opportunity Hub, Marketplace, Clerk, Shared Event engine internals, or Turso **outside** `src/db/` (ADR-007: driver only).
 - Event integration is `club_event_links.external_event_id` only (FR-CLB-010).
 
 ## Reuse map (References)
@@ -16,7 +16,7 @@ Owned paths: this package, `../../docs/adr/`, `../../Club_Management_TodoList.md
 |---------|--------|------------|
 | Permission / membership history | `References/Atrium` | Position→permission catalog, append-only membership history |
 | Task assign → review → done | `References/ClubHub-Pro` | Workflow + PoW; status enum instead of Mongo flags |
-| Local Drizzle/SQLite DX | `References/ClubKit` | File DB, server actions/API style — **no Clerk/Turso required** |
+| Local Drizzle/SQLite DX | `References/ClubKit` | File DB for `npm run dev` — **no Turso required locally** (ADR-007) |
 
 ## Gates implemented in this codebase
 
@@ -41,13 +41,17 @@ npm run dev              # http://localhost:3000
 
 Demo users: `leader@pfc.vn` / `member@pfc.vn` — password `PFC123!`
 
-## Env (session)
+Public hosting: see **[DEPLOY.md](./DEPLOY.md)** (Turso + Vercel).
+
+## Env
 
 | Variable | Purpose |
 |----------|---------|
-| `CLUB_SESSION_SECRET` | HMAC-SHA256 key for the session cookie. **Required** in every environment; never commit a real value. |
+| `CLUB_SESSION_SECRET` | HMAC-SHA256 key for the session cookie. **Required**; never commit a real value. |
 | `CLUB_SESSION_TTL_SECONDS` | Cookie lifetime (default `604800` = 7 days). |
-| `CLUB_DB_PATH` | SQLite file path (optional). |
+| `TURSO_DATABASE_URL` | Production libSQL URL. Empty = local file SQLite. |
+| `TURSO_AUTH_TOKEN` | Required when the Turso URL is set. |
+| `CLUB_DB_PATH` | Local SQLite file path (ignored when Turso URL is set). |
 
 Unsigned legacy cookies (raw member id) are rejected with **401**. Role / `isSuperAdmin` are loaded from the DB after HMAC verify (CM-104).
 
@@ -59,7 +63,7 @@ Critical writes accept `Idempotency-Key` header.
 
 ## Data
 
-SQLite file: `apps/club/.data/club.sqlite` (gitignored). On Vercel the file lives in `/tmp` (demo data may reset when the server sleeps).
+Local: `apps/club/.data/club.sqlite` (gitignored). Production: Turso when `TURSO_DATABASE_URL` is set (ADR-007).
 
 ## Migrations (CM-101)
 
