@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId, getProviderProfileId } from "@/lib/member";
+import { getProviderProfileId } from "@/lib/member";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -33,29 +33,13 @@ export async function GET() {
 /** Create Draft — inspired by jobhive POST /api/jobs */
 export async function POST(req: NextRequest) {
   const providerId = await getProviderProfileId();
-  const memberId = await getMemberId();
   if (!providerId) {
-    // auto-bootstrap provider profile for demo provider member
-    if (memberId !== "member_demo_provider") {
-      return NextResponse.json({ error: "Not a provider" }, { status: 403 });
-    }
+    return NextResponse.json({ error: "Not a provider" }, { status: 403 });
   }
 
   const body = createSchema.safeParse(await req.json());
   if (!body.success) {
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
-  }
-
-  let pid = providerId;
-  if (!pid) {
-    const created = await prisma.providerProfile.create({
-      data: {
-        memberId,
-        displayName: "Demo Provider",
-        verificationTier: "VERIFIED_PROVIDER",
-      },
-    });
-    pid = created.id;
   }
 
   const d = body.data;
@@ -65,7 +49,7 @@ export async function POST(req: NextRequest) {
 
   const item = await prisma.oppOpportunity.create({
     data: {
-      providerId: pid,
+      providerId,
       type: d.type,
       title: d.title.trim(),
       summary: d.summary?.trim(),

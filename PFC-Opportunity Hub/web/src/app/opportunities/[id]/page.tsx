@@ -28,6 +28,8 @@ export default function OpportunityDetailPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [coverLetter, setCoverLetter] = useState("Em quan tâm cơ hội này.");
+  const [cv, setCv] = useState<File | null>(null);
   const idem = useMemo(() => (typeof crypto !== "undefined" ? crypto.randomUUID() : String(Date.now())), [id]);
 
   useEffect(() => {
@@ -125,24 +127,36 @@ export default function OpportunityDetailPage() {
           </button>
         )}
         {(item.applyMode === "INTERNAL" || item.applyMode === "BOTH") && (
-          <button
-            type="button"
-            className="pfc-btn pfc-btn-outline"
-            disabled={busy}
-            onClick={async () => {
+          <form
+            className="space-y-2"
+            onSubmit={async (e) => {
+              e.preventDefault();
               setBusy(true);
+              setError("");
               try {
+                let attachmentId: string | undefined;
+                if (cv) {
+                  const body = new FormData();
+                  body.set("file", cv);
+                  const up = await fetch("/api/me/cv", { method: "POST", body });
+                  const uploaded = await up.json();
+                  if (!up.ok) {
+                    setError(uploaded.error || "Không tải được CV");
+                    return;
+                  }
+                  attachmentId = uploaded.attachmentId;
+                }
                 const res = await fetch(`/api/opportunities/${id}/apply/internal`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
                     "Idempotency-Key": idem + "-internal",
                   },
-                  body: JSON.stringify({ coverLetter: "Em quan tâm cơ hội này." }),
+                  body: JSON.stringify({ coverLetter, attachmentId }),
                 });
                 const data = await res.json();
                 if (!res.ok) {
-                  setError(data.error || "Internal apply thất bại");
+                  setError(typeof data.error === "string" ? data.error : "Internal apply thất bại");
                   return;
                 }
                 router.push("/applications");
@@ -151,8 +165,22 @@ export default function OpportunityDetailPage() {
               }
             }}
           >
-            Nộp hồ sơ nội bộ (Internal)
-          </button>
+            <textarea
+              value={coverLetter}
+              onChange={(e) => setCoverLetter(e.target.value)}
+              className="w-full rounded-xl border border-[var(--pfc-line)] px-3 py-2 text-sm"
+              rows={3}
+            />
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,application/pdf"
+              onChange={(e) => setCv(e.target.files?.[0] ?? null)}
+              className="block w-full text-xs"
+            />
+            <button type="submit" className="pfc-btn pfc-btn-outline" disabled={busy}>
+              Nộp hồ sơ nội bộ (Internal)
+            </button>
+          </form>
         )}
       </div>
       {error && <p className="mt-2 text-xs text-[var(--pfc-danger)]">{error}</p>}

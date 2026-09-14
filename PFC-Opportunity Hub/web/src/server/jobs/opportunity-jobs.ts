@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { channelsFor } from "@/domain/notification/channels";
 import { assertTransition } from "@/domain/opportunity/status";
 import { dueWindows, messageFor, windowLabel } from "@/domain/opportunity/reminders";
 
@@ -14,10 +15,21 @@ export async function runExpireJob(now = new Date()) {
   let expired = 0;
   for (const opp of due) {
     assertTransition("VERIFIED", "EXPIRED");
-    await prisma.oppOpportunity.update({
-      where: { id: opp.id },
-      data: { status: "EXPIRED" },
-    });
+    await prisma.$transaction([
+      prisma.oppOpportunity.update({
+        where: { id: opp.id },
+        data: { status: "EXPIRED" },
+      }),
+      prisma.oppVerificationDecision.create({
+        data: {
+          opportunityId: opp.id,
+          actorId: "system:expire-job",
+          fromStatus: "VERIFIED",
+          toStatus: "EXPIRED",
+          reason: "expireAt passed",
+        },
+      }),
+    ]);
     expired += 1;
   }
   return { scanned: due.length, expired };
@@ -54,7 +66,8 @@ export async function runRemindJob(now = new Date()) {
   for (const { memberId, opportunity } of map.values()) {
     if (opportunity.status !== "VERIFIED") continue;
     const pref = await prisma.oppReminderPreference.findUnique({ where: { memberId } });
-    if (pref && (!pref.enabled || !pref.inApp)) {
+    const channels = channelsFor(pref);
+    if (channels.length === 0) {
       skipped += 1;
       continue;
     }
@@ -80,20 +93,24 @@ export async function runRemindJob(now = new Date()) {
         : "sắp tới";
       const body = messageFor(opportunity.title, window, deadlineLabel);
       const deepLink = `/opportunities/${opportunity.id}`;
+      const title = windowLabel(window);
 
       await prisma.$transaction([
         prisma.oppReminderLog.create({
           data: { memberId, opportunityId: opportunity.id, window },
         }),
-        prisma.oppNotification.create({
-          data: {
-            memberId,
-            opportunityId: opportunity.id,
-            title: windowLabel(window),
-            body,
-            deepLink,
-          },
-        }),
+        ...channels.map((channel) =>
+          prisma.oppDelivery.create({
+            data: {
+              memberId,
+              opportunityId: opportunity.id,
+              channel,
+              title,
+              body,
+              deepLink,
+            },
+          }),
+        ),
       ]);
       created += 1;
     }

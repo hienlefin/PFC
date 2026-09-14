@@ -12,9 +12,15 @@ npm run db:seed
 npm run dev
 ```
 
-Open http://localhost:3000
+Open http://localhost:3000/login — session httpOnly, không đặt cookie member id.
 
-Demo member cookie mặc định: `member_demo_linh` (seed).
+| Role | Email | Password |
+|------|-------|----------|
+| Member | phuonglinh@pfc.vn | Linh-PFC-2026 |
+| Provider | provider@pfc.vn | Provider-PFC-2026 |
+| Reviewer | reviewer@pfc.vn | Reviewer-PFC-2026 |
+
+Job expire/remind chỉ POST kèm header `x-cron-secret` (= `CRON_SECRET` trong `.env`). Postgres local: `docker compose up -d` rồi đổi `DATABASE_URL` (xem `.env.example`).
 
 ## P0 routes
 

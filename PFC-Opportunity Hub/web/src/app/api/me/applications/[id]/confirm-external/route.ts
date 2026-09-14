@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustMember } from "@/lib/member";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 /** A05: member marks external application as submitted after redirect */
 export async function POST(_req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
 
   const app = await prisma.oppApplication.findUnique({ where: { id } });
   if (!app || app.memberId !== memberId) {

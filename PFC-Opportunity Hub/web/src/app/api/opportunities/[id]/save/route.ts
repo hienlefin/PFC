@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustMember } from "@/lib/member";
 import { isPubliclyVisible } from "@/domain/opportunity/status";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(_req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
 
   const opp = await prisma.oppOpportunity.findUnique({ where: { id } });
   if (!opp || !isPubliclyVisible(opp.status, opp.expireAt)) {
@@ -25,7 +26,8 @@ export async function POST(_req: NextRequest, ctx: Ctx) {
 
 export async function DELETE(_req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
 
   await prisma.oppSavedOpportunity.deleteMany({
     where: { memberId, opportunityId: id },

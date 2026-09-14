@@ -8,6 +8,7 @@ type App = {
   status: string;
   channel: string;
   coverLetter?: string | null;
+  attachmentId?: string | null;
   member: { name: string; email: string };
   opportunity: { id: string; title: string; type: string };
 };
@@ -26,7 +27,7 @@ export default function ProviderApplicantsPage() {
     const res = await fetch("/api/provider/applicants");
     const data = await res.json();
     if (!res.ok) {
-      setError(data.error || "Cần cookie provider");
+      setError(data.error || "Cần đăng nhập bằng tài khoản provider");
       return;
     }
     setItems(data.items || []);
@@ -74,6 +75,23 @@ export default function ProviderApplicantsPage() {
               {app.member.name} · {app.member.email} · {app.channel}
             </p>
             {app.coverLetter && <p className="mt-2 text-sm">{app.coverLetter}</p>}
+            {app.attachmentId && (
+              <button
+                type="button"
+                className="mt-2 text-xs font-semibold text-[var(--pfc-purple)]"
+                onClick={async () => {
+                  const res = await fetch(`/api/attachments/${app.attachmentId}/sign`, { method: "POST" });
+                  const data = await res.json();
+                  if (!res.ok) {
+                    alert(data.error || "Không mở được CV");
+                    return;
+                  }
+                  window.open(data.url, "_blank", "noopener");
+                }}
+              >
+                Xem CV (link 10 phút)
+              </button>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               {(NEXT[app.status] || []).map((s) => (
                 <button key={s} type="button" className="chip" onClick={() => setStatus(app.id, s)}>

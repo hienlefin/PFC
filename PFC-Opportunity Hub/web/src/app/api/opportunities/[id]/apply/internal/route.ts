@@ -1,20 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustMember } from "@/lib/member";
 import { isPubliclyVisible } from "@/domain/opportunity/status";
+import { rateLimit } from "@/lib/rate-limit";
 import { z } from "zod";
 
 type Ctx = { params: Promise<{ id: string }> };
 
 const schema = z.object({
   coverLetter: z.string().max(5000).optional(),
-  resumeUrl: z.string().url().optional(),
+  attachmentId: z.string().min(8).optional(),
   idempotencyKey: z.string().min(8).optional(),
 });
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
+  if (!rateLimit(`apply:${memberId}`, 10, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Quá nhiều lần ứng tuyển" }, { status: 429 });
+  }
   const body = schema.safeParse(await req.json().catch(() => ({})));
   if (!body.success) {
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });
@@ -36,7 +41,9 @@ export async function POST(req: NextRequest, ctx: Ctx) {
     }
   }
 
-  const app = await prisma.$transaction(async (tx) => {
+  let app;
+  try {
+    app = await prisma.$transaction(async (tx) => {
     const created = await tx.oppApplication.create({
       data: {
         memberId,
@@ -44,7 +51,6 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         channel: "INTERNAL",
         status: "SUBMITTED",
         coverLetter: body.data.coverLetter,
-        resumeUrl: body.data.resumeUrl,
         idempotencyKey: key,
       },
     });
@@ -56,8 +62,23 @@ export async function POST(req: NextRequest, ctx: Ctx) {
         note: "Internal apply",
       },
     });
+    if (body.data.attachmentId) {
+      const linked = await tx.oppAttachment.updateMany({
+        where: { id: body.data.attachmentId, ownerMemberId: memberId, applicationId: null },
+        data: { applicationId: created.id },
+      });
+      if (linked.count !== 1) {
+        throw new Error("CV_LINK_FAILED");
+      }
+    }
     return created;
-  });
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === "CV_LINK_FAILED") {
+      return NextResponse.json({ error: "CV không hợp lệ hoặc đã gắn hồ sơ khác" }, { status: 400 });
+    }
+    throw err;
+  }
 
   return NextResponse.json(
     { applicationId: app.id, status: app.status, reused: false },

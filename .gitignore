@@ -3,7 +3,11 @@
 Thumbs.db
 .idea/
 .vscode/
-.cursor/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
+!.cursor/skills/
+!.cursor/skills/**
 *.swp
 
 # Secrets / keys / env

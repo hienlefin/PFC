@@ -24,6 +24,10 @@ Current execution focus: **Club Management**
 - App: `PFC-Management/apps/club` (`npm run dev`)
 - References reused: Atrium (RBAC), ClubHub-Pro (task workflow), ClubKit (Drizzle/SQLite DX)
 
+## Máy khác
+
+Đọc [NEXT.md](./NEXT.md). Pull repo, mở folder này trong Cursor, dán lệnh trong file đó để làm module tiếp theo. Không cần tải lại SRS.
+
 ## Remote
 
 - GitHub: https://github.com/hienlefin/PFC  

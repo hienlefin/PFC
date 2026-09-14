@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustMember } from "@/lib/member";
+import { rateLimit } from "@/lib/rate-limit";
 import { assertHttpsUrl, isPubliclyVisible } from "@/domain/opportunity/status";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -11,7 +12,11 @@ type Ctx = { params: Promise<{ id: string }> };
  */
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
+  if (!rateLimit(`apply:${memberId}`, 10, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Quá nhiều lần ứng tuyển" }, { status: 429 });
+  }
   const idempotencyKey = req.headers.get("idempotency-key") || undefined;
 
   const opp = await prisma.oppOpportunity.findUnique({ where: { id } });

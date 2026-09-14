@@ -20,7 +20,7 @@ export default function ProviderPage() {
     const res = await fetch("/api/provider/opportunities");
     const data = await res.json();
     if (!res.ok) {
-      setError(data.error || "Cần đăng nhập provider (cookie member_demo_provider)");
+      setError(data.error || "Cần đăng nhập bằng tài khoản provider");
       return;
     }
     setItems(data.items || []);
@@ -53,10 +53,11 @@ export default function ProviderPage() {
         <Link href="/provider/expired" className="chip">Expired</Link>
         <Link href="/reviewer" className="chip">Reviewer</Link>
       </div>
-      {error && <p className="mb-3 text-sm text-[var(--pfc-danger)]">{error}</p>}
-      <p className="mb-3 text-xs text-[var(--pfc-muted)]">
-        Demo: set cookie <code>pfc_member_id=member_demo_provider</code>
-      </p>
+      {error && (
+        <p className="mb-3 text-sm text-[var(--pfc-danger)]">
+          {error}. Đăng nhập provider@pfc.vn
+        </p>
+      )}
       <div className="space-y-3">
         {items.map((item) => (
           <div key={item.id} className="rounded-2xl border border-[var(--pfc-line)] bg-white p-4">

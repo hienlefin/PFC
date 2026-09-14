@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustMember } from "@/lib/member";
+import { rateLimit } from "@/lib/rate-limit";
 import { isPubliclyVisible } from "@/domain/opportunity/status";
 import { z } from "zod";
 
@@ -19,7 +20,11 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
+  if (!rateLimit(`report:${memberId}`, 5, 60 * 60 * 1000)) {
+    return NextResponse.json({ error: "Quá nhiều báo cáo" }, { status: 429 });
+  }
   const body = schema.safeParse(await req.json());
   if (!body.success) {
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });

@@ -23,27 +23,13 @@ export default function NotificationsPage() {
   return (
     <main className="px-4 pb-6 pt-5">
       <h1 className="mb-1 text-xl font-bold">Nhắc hạn</h1>
-      <p className="mb-4 text-sm text-[var(--pfc-muted)]">OPP-17 · deep link về detail</p>
-      <div className="mb-4 flex gap-2">
-        <button
-          type="button"
-          className="chip"
-          onClick={() => fetch("/api/jobs/remind", { method: "POST" }).then(() => location.reload())}
-        >
-          Chạy remind job
-        </button>
-        <button
-          type="button"
-          className="chip"
-          onClick={() => fetch("/api/jobs/expire", { method: "POST" }).then(() => alert("Expire done"))}
-        >
-          Chạy expire job
-        </button>
-      </div>
+      <p className="mb-4 text-sm text-[var(--pfc-muted)]">
+        Nhắc hạn do cron gọi API với header x-cron-secret. Không chạy từ trình duyệt.
+      </p>
       <div className="space-y-3">
         {items.length === 0 && (
           <p className="rounded-2xl border border-dashed border-[var(--pfc-line)] p-6 text-center text-sm text-[var(--pfc-muted)]">
-            Chưa có nhắc hạn. Save một cơ hội gần deadline rồi chạy remind job.
+            Chưa có nhắc hạn. Đăng nhập, lưu cơ hội gần deadline; cron sẽ gửi nhắc.
           </p>
         )}
         {items.map((n) => (

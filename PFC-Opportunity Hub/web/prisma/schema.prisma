@@ -7,20 +7,36 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Demo Member — production sẽ map Platform member_id
+/// Member identity. Role is server-side only — never taken from the client.
 model Member {
-  id            String   @id @default(cuid())
-  name          String
-  email         String   @unique
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         MemberRole @default(MEMBER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
+  sessions         OppSession[]
   providerProfiles ProviderProfile[]
   saves            OppSavedOpportunity[]
   applications     OppApplication[]
   reminderPrefs    OppReminderPreference?
   reminderLogs     OppReminderLog[]
   notifications    OppNotification[]
+}
+
+/// Opaque session. Cookie stores token, not member id.
+model OppSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  memberId  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
 }
 
 model ProviderProfile {
@@ -96,6 +112,7 @@ model OppApplication {
   member      Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
   opportunity OppOpportunity       @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
   history     OppApplicationEvent[]
+  attachment  OppAttachment?
 
   @@index([memberId, createdAt])
   @@index([opportunityId, status])
@@ -150,8 +167,43 @@ model OppNotification {
   createdAt     DateTime @default(now())
 
   member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  deliveryId String? @unique
 
   @@index([memberId, createdAt])
+}
+
+/// Private CV. `storageKey` is an opaque id — never returned to clients.
+model OppAttachment {
+  id            String   @id @default(cuid())
+  ownerMemberId String
+  applicationId String?  @unique
+  storageKey    String   @unique
+  fileName      String
+  mimeType      String
+  byteSize      Int
+  createdAt     DateTime @default(now())
+
+  application OppApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@index([ownerMemberId])
+}
+
+/// Notification command. Worker delivers; request path must not send mail.
+model OppDelivery {
+  id            String   @id @default(cuid())
+  memberId      String
+  opportunityId String?
+  channel       String
+  status        String   @default("PENDING")
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  lastError     String?
+  title         String
+  body          String
+  deepLink      String?
+  createdAt     DateTime @default(now())
+
+  @@index([status, nextAttemptAt])
 }
 
 model OppVerificationDecision {
@@ -164,6 +216,12 @@ model OppVerificationDecision {
   createdAt     DateTime @default(now())
 
   @@index([opportunityId, createdAt])
+}
+
+enum MemberRole {
+  MEMBER
+  PROVIDER
+  REVIEWER
 }
 
 enum ProviderTier {

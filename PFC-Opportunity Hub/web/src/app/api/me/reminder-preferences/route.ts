@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustMember } from "@/lib/member";
 import { z } from "zod";
 
 const schema = z.object({
@@ -11,7 +11,8 @@ const schema = z.object({
 });
 
 export async function GET() {
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
   const pref =
     (await prisma.oppReminderPreference.findUnique({ where: { memberId } })) ||
     (await prisma.oppReminderPreference.create({
@@ -21,7 +22,8 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
   const body = schema.safeParse(await req.json());
   if (!body.success) {
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });

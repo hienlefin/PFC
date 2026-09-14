@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustMember } from "@/lib/member";
 
 export async function GET() {
-  const memberId = await getMemberId();
+  const memberId = await mustMember();
+  if (memberId instanceof NextResponse) return memberId;
   const items = await prisma.oppSavedOpportunity.findMany({
     where: { memberId },
     orderBy: { createdAt: "desc" },

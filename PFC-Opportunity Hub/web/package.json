@@ -9,14 +9,17 @@
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "worker": "tsx src/server/jobs/worker.ts",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.3",
+    "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.544.0",
     "next": "15.5.4",
+    "nodemailer": "^10.0.9",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "tailwind-merge": "^3.3.1",

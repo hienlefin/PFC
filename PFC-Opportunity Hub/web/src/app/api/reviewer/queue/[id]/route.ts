@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustReviewer } from "@/lib/member";
 import { assertTransition } from "@/domain/opportunity/status";
 import { z } from "zod";
 
@@ -13,7 +13,8 @@ type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, ctx: Ctx) {
   const { id } = await ctx.params;
-  const actorId = await getMemberId();
+  const actorId = await mustReviewer();
+  if (actorId instanceof NextResponse) return actorId;
   const body = schema.safeParse(await req.json());
   if (!body.success) {
     return NextResponse.json({ error: body.error.flatten() }, { status: 400 });

@@ -23,8 +23,14 @@ export async function GET(req: NextRequest) {
       member: { select: { id: true, name: true, email: true } },
       opportunity: { select: { id: true, title: true, type: true } },
       history: { orderBy: { createdAt: "asc" } },
+      attachment: { select: { id: true } },
     },
   });
 
-  return NextResponse.json({ items });
+  return NextResponse.json({
+    items: items.map(({ resumeUrl: _hidden, attachment, ...rest }) => ({
+      ...rest,
+      attachmentId: attachment?.id ?? null,
+    })),
+  });
 }

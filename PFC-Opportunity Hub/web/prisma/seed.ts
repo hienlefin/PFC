@@ -1,11 +1,23 @@
 import { PrismaClient, OpportunityType, ApplyMode, WorkMode, EmploymentType } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient();
 
+function hash(plain: string) {
+  return bcrypt.hashSync(plain, 12);
+}
+
 async function main() {
   await prisma.oppApplicationEvent.deleteMany();
+  await prisma.oppAttachment.deleteMany();
+  await prisma.oppDelivery.deleteMany();
   await prisma.oppApplication.deleteMany();
   await prisma.oppSavedOpportunity.deleteMany();
+  await prisma.oppVerificationDecision.deleteMany();
+  await prisma.oppReminderLog.deleteMany();
+  await prisma.oppReminderPreference.deleteMany();
+  await prisma.oppNotification.deleteMany();
+  await prisma.oppSession.deleteMany();
   await prisma.oppOpportunity.deleteMany();
   await prisma.providerProfile.deleteMany();
   await prisma.member.deleteMany();
@@ -15,6 +27,8 @@ async function main() {
       id: "member_demo_linh",
       name: "Nguyễn Phương Linh",
       email: "phuonglinh@pfc.vn",
+      passwordHash: hash("Linh-PFC-2026"),
+      role: "MEMBER",
     },
   });
 
@@ -23,6 +37,18 @@ async function main() {
       id: "member_demo_provider",
       name: "Trần Quang Minh",
       email: "provider@pfc.vn",
+      passwordHash: hash("Provider-PFC-2026"),
+      role: "PROVIDER",
+    },
+  });
+
+  await prisma.member.create({
+    data: {
+      id: "member_demo_reviewer",
+      name: "PFC Reviewer",
+      email: "reviewer@pfc.vn",
+      passwordHash: hash("Reviewer-PFC-2026"),
+      role: "REVIEWER",
     },
   });
 

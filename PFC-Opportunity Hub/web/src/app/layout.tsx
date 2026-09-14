@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
+import { AccountBar } from "@/components/account-bar";
 import { BottomNav } from "@/components/bottom-nav";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
@@ -14,7 +15,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="vi">
       <body className={`${geist.variable} antialiased`}>
-        <div className="pfc-phone pb-20">{children}</div>
+        <div className="pfc-phone pb-20">
+          <AccountBar />
+          {children}
+        </div>
         <BottomNav />
       </body>
     </html>

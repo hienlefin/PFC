@@ -1,21 +1,35 @@
-import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { forbidden, getAuthUser, unauthorized, type AuthUser } from "@/lib/auth";
 
-export const DEMO_MEMBER_ID = "member_demo_linh";
-export const DEMO_PROVIDER_MEMBER_ID = "member_demo_provider";
-export const DEMO_REVIEWER_ID = "member_demo_provider"; // demo: provider account also reviews
-export const MEMBER_COOKIE = "pfc_member_id";
+/** Logged-in member id, or null. Never defaults to a demo user. */
+export async function getMemberId(): Promise<string | null> {
+  const user = await getAuthUser();
+  return user?.id ?? null;
+}
 
-/** P0/P1 demo identity — production: Platform session */
-export async function getMemberId(): Promise<string> {
-  const jar = await cookies();
-  return jar.get(MEMBER_COOKIE)?.value || DEMO_MEMBER_ID;
+export async function getAuth(): Promise<AuthUser | null> {
+  return getAuthUser();
+}
+
+export async function mustMember(): Promise<string | NextResponse> {
+  const user = await getAuthUser();
+  if (!user) return unauthorized();
+  return user.id;
+}
+
+export async function mustReviewer(): Promise<string | NextResponse> {
+  const user = await getAuthUser();
+  if (!user) return unauthorized();
+  if (user.role !== "REVIEWER") return forbidden("Reviewer role required");
+  return user.id;
 }
 
 export async function getProviderProfileId(): Promise<string | null> {
-  const memberId = await getMemberId();
-  const { prisma } = await import("@/lib/prisma");
+  const user = await getAuthUser();
+  if (!user || user.role !== "PROVIDER") return null;
   const profile = await prisma.providerProfile.findFirst({
-    where: { memberId },
+    where: { memberId: user.id },
     orderBy: { createdAt: "asc" },
   });
   return profile?.id ?? null;

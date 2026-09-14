@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getMemberId } from "@/lib/member";
+import { mustReviewer } from "@/lib/member";
 import { z } from "zod";
 
 const schema = z.object({
@@ -10,7 +10,8 @@ const schema = z.object({
 
 /** Takedown / resolve reported opportunity (reviewer) */
 export async function POST(req: NextRequest) {
-  const actorId = await getMemberId();
+  const actorId = await mustReviewer();
+  if (actorId instanceof NextResponse) return actorId;
   const opportunityId = req.nextUrl.searchParams.get("opportunityId");
   if (!opportunityId) {
     return NextResponse.json({ error: "opportunityId required" }, { status: 400 });
@@ -56,6 +57,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
+  const actor = await mustReviewer();
+  if (actor instanceof NextResponse) return actor;
   const reports = await prisma.oppVerificationDecision.findMany({
     where: { toStatus: "REPORT" },
     orderBy: { createdAt: "desc" },

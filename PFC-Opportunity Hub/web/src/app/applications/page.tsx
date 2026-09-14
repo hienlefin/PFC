@@ -9,6 +9,7 @@ type AppItem = {
   id: string;
   status: string;
   channel: string;
+  attachmentId?: string | null;
   opportunity: {
     id: string;
     title: string;
@@ -71,6 +72,23 @@ export default function ApplicationsPage() {
                 <DeadlineCountdown deadline={app.opportunity.deadlineAt} />
               </div>
             </Link>
+            {app.attachmentId && (
+              <button
+                type="button"
+                className="mt-3 text-xs font-semibold text-[var(--pfc-purple)]"
+                onClick={async () => {
+                  const res = await fetch(`/api/attachments/${app.attachmentId}/sign`, { method: "POST" });
+                  const data = await res.json();
+                  if (!res.ok) {
+                    alert(data.error || "Không mở được CV");
+                    return;
+                  }
+                  window.open(data.url, "_blank", "noopener");
+                }}
+              >
+                Xem CV đã nộp
+              </button>
+            )}
             {app.channel === "EXTERNAL" && app.status === "REDIRECTED" && (
               <button type="button" className="pfc-btn mt-3" onClick={() => confirmExternal(app.id)}>
                 Đã nộp bên ngoài
