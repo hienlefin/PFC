@@ -1,0 +1,16 @@
+---
+description: Security by Design khi viết/sửa code PFC — deny-by-default, AuthZ, validate, least privilege.
+globs: "**/*.{ts,tsx,js,jsx}"
+alwaysApply: false
+---
+
+# Security by Design
+
+- **Deny by default:** mọi action có authz tường minh; public chỉ data đủ điều kiện publish.
+- **AuthZ object-level trên server:** không tin role/status từ client; Draft/Pending không lộ ra ngoài.
+- **Trust boundary:** Verified / application status chỉ qua transition server-side + **audit**.
+- **Validate biên API** (Zod…): whitelist field; CV type/size; outbound URL https only.
+- **Least privilege:** CV qua signed URL TTL ngắn; không trả storage path; không leak PII trên list.
+- **Idempotent apply/save**; fail closed (403, không partial write). Không hardcode secret / log token.
+- Trước merge hỏi: *Ai gọi? Object nào? Input? Data nhạy cảm? Audit?*
+---

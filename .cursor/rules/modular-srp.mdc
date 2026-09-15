@@ -1,0 +1,14 @@
+---
+description: Module hoá + SRP khi viết/sửa code PFC (Opportunity Hub, Club, apps).
+globs: "**/*.{ts,tsx,js,jsx}"
+alwaysApply: false
+---
+
+# Module hoá + SRP
+
+- **Bounded module:** Opportunity = package/`opp_` + API `/opportunities/*`; không import nội bộ module khác.
+- **Tầng rõ:** `domain/` (FSM/policy thuần) ← `server|services/` (use-case) ← UI/API. Domain không import Next/DB.
+- **SRP:** một file/function một lý do đổi — tách Catalog, Application, Verification, Reminder, Report; tránh god service.
+- **FSM ở domain** (unit-test không DB); route/handler chỉ validate → authz → gọi use-case → map lỗi.
+- **Không** nhúng business rule / lifecycle vào React page hoặc SQL rải rác trong UI.
+---
