@@ -6,8 +6,10 @@ Umbrella workspace for personal-finance products and experiments.
 
 | Path | Description |
 |------|-------------|
-| **PFC-Management/** | **PFC Digital Hub** — requirements, Club Management production app, ADRs, reference clones. Primary build target. |
-| **PFC-Management/apps/club/** | **Club Management app** (Next.js) — run this for G0–G5 club ops. |
+| **PFC-Management/** | **PFC Digital Hub** — requirements, Club Management production app, ADRs, reference clones. |
+| **PFC-Management/apps/club/** | **Club Management app** (Next.js) — G0–G5 club ops. |
+| **PFC-Opportunity Hub/** | Opportunity Hub architecture pack + Next.js app. |
+| **PFC-Marketplace/** | Marketplace (EARN) architecture pack + Next.js P0 (catalog → cart → checkout → Mock payment). |
 | **BeeCount-Cloud/** | Local Docker compose for BeeCount Cloud — exploration / reference. |
 | **Test/** | Scratch / experiments. |
 

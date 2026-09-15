@@ -8,6 +8,7 @@ Pull repo này về, mở đúng folder gốc trong Cursor. Không cần tạo f
 |-----|-------------------|
 | `source/` | SRS v3.0, Screen Inventory, checklist, ảnh mockup. Đừng tải lại. |
 | `PFC-Opportunity Hub/` | Mẫu đã chốt: kiến trúc, ADR, `AGENTS.md`, code `web/` |
+| `PFC-Marketplace/` | Marketplace pack + P0 app (catalog → cart → checkout → Mock payment) |
 | `.cursor/skills/architecture-copilot` | Skill thiết kế. Cursor đọc khi mở repo này. |
 | `.cursor/rules/` | Rule architecture, SRP, security. |
 

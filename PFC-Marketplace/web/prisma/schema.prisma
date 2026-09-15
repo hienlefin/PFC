@@ -1,0 +1,268 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberRole {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+enum SellerTier {
+  UNVERIFIED
+  VERIFIED
+  TRUSTED
+}
+
+enum ListingType {
+  PHYSICAL
+  DIGITAL
+  SERVICE
+  COURSE
+  EVENT_TICKET
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  UNPUBLISHED
+  ARCHIVED
+}
+
+enum CartStatus {
+  OPEN
+  CHECKED_OUT
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PAID
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  MOCK
+  VNPAY
+}
+
+enum PaymentStatus {
+  INITIATED
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum PayoutStatus {
+  PENDING
+  ELIGIBLE
+  PAID
+  BLOCKED
+}
+
+model Member {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  role         MemberRole @default(BUYER)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  sessions MktSession[]
+  seller   MktSellerProfile?
+  carts    MktCart[]
+  orders   MktOrder[]        @relation("BuyerOrders")
+  reviews  MktReview[]
+  audits   MktAuditEvent[]
+}
+
+model MktSession {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  memberId  String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId])
+}
+
+model MktSellerProfile {
+  id                String     @id @default(cuid())
+  memberId          String     @unique
+  displayName       String
+  verificationTier  SellerTier @default(UNVERIFIED)
+  payoutEligible    Boolean    @default(false)
+  bankAccountHint   String?
+  status            String     @default("active")
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  member   Member      @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  listings MktListing[]
+  orders   MktOrder[]  @relation("SellerOrders")
+  payouts  MktPayoutRecord[]
+}
+
+model MktListing {
+  id              String        @id @default(cuid())
+  sellerId        String
+  type            ListingType
+  title           String
+  summary         String?
+  description     String
+  priceVnd        Int
+  currency        String        @default("VND")
+  inventoryQty    Int?
+  deliveryMeta    String?
+  serviceMeta     String?
+  externalRefType String?
+  externalRefId   String?
+  status          ListingStatus @default(DRAFT)
+  publishedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  seller    MktSellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  cartItems MktCartItem[]
+  orderItems MktOrderItem[]
+
+  @@index([status, publishedAt])
+  @@index([sellerId, status])
+  @@index([type, status])
+}
+
+model MktCart {
+  id        String     @id @default(cuid())
+  memberId  String
+  status    CartStatus @default(OPEN)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  member Member        @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  items  MktCartItem[]
+
+  @@index([memberId, status])
+}
+
+model MktCartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  listingId String
+  quantity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart    MktCart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  listing MktListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, listingId])
+}
+
+model MktOrder {
+  id                  String      @id @default(cuid())
+  buyerId             String
+  sellerId            String
+  status              OrderStatus @default(PENDING_PAYMENT)
+  totalVnd            Int
+  commissionBpsApplied Int
+  currency            String      @default("VND")
+  idempotencyKey      String      @unique
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+
+  buyer    Member           @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller   MktSellerProfile @relation("SellerOrders", fields: [sellerId], references: [id], onDelete: Cascade)
+  items    MktOrderItem[]
+  payments MktPayment[]
+  payouts  MktPayoutRecord[]
+  review   MktReview?
+
+  @@index([buyerId, createdAt])
+  @@index([sellerId, status])
+}
+
+model MktOrderItem {
+  id           String @id @default(cuid())
+  orderId      String
+  listingId    String?
+  title        String
+  unitPriceVnd Int
+  quantity     Int
+
+  order   MktOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  listing MktListing? @relation(fields: [listingId], references: [id], onDelete: SetNull)
+}
+
+model MktPayment {
+  id             String          @id @default(cuid())
+  orderId        String
+  provider       PaymentProvider
+  status         PaymentStatus   @default(INITIATED)
+  amountVnd      Int
+  providerRef    String?
+  idempotencyKey String          @unique
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  order MktOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([provider, providerRef])
+}
+
+model MktPayoutRecord {
+  id            String       @id @default(cuid())
+  sellerId      String
+  orderId       String
+  grossVnd      Int
+  commissionVnd Int
+  netVnd        Int
+  status        PayoutStatus @default(PENDING)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  seller MktSellerProfile @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  order  MktOrder         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId])
+  @@index([sellerId, status])
+}
+
+model MktReview {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  memberId  String
+  rating    Int
+  body      String?
+  createdAt DateTime @default(now())
+
+  order  MktOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  member Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+model MktAuditEvent {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String
+  meta      String?
+  createdAt DateTime @default(now())
+
+  actor Member? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entity, entityId])
+}
