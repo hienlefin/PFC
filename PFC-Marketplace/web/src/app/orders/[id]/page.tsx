@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BottomNav, Money } from "@/components/ui";
+import { BottomNav, Money, StatusBar } from "@/components/ui";
 
 type Order = {
   id: string;
@@ -29,8 +29,7 @@ export default function OrderDetailPage() {
       return;
     }
     const d = await res.json();
-    const found = (d.items || []).find((o: Order) => o.id === id);
-    setOrder(found || null);
+    setOrder((d.items || []).find((o: Order) => o.id === id) || null);
   }
 
   useEffect(() => {
@@ -66,67 +65,75 @@ export default function OrderDetailPage() {
     await load();
   }
 
-  if (!order) {
-    return (
-      <main className="mkt-section">
-        {error ? <div className="mkt-error">{error}</div> : "Đang tải…"}
-      </main>
-    );
-  }
-
   return (
-    <>
-      <main className="mkt-section" style={{ paddingTop: 24 }}>
-        <Link href="/orders" style={{ color: "var(--mkt-accent)", fontSize: 14 }}>
-          ← Đơn hàng
-        </Link>
-        <h1 style={{ fontFamily: "var(--font-display)", marginTop: 10 }}>Chi tiết đơn</h1>
-        <div className="mkt-chip">{order.status}</div>
-        <p style={{ fontWeight: 700 }}>
-          <Money vnd={order.totalVnd} />
-        </p>
-        <div className="mkt-card">
-          {order.items.map((i, idx) => (
-            <div key={idx} style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span>
-                {i.title} × {i.quantity}
-              </span>
-              <Money vnd={i.unitPriceVnd * i.quantity} />
+    <div className="phone-scroll">
+      <StatusBar />
+      <div className="back-title">
+        <button type="button" className="icon-btn" onClick={() => router.push("/orders")}>
+          ←
+        </button>
+        <h1>Chi tiết đơn</h1>
+      </div>
+      <div className="page-pad">
+        {!order ? (
+          <p className="muted">{error || "Đang tải…"}</p>
+        ) : (
+          <>
+            <div className="tag">{order.status}</div>
+            <p className="price" style={{ fontSize: 22, margin: "10px 0" }}>
+              <Money vnd={order.totalVnd} />
+            </p>
+            <div className="card">
+              {order.items.map((i, idx) => (
+                <div
+                  key={idx}
+                  style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}
+                >
+                  <span>
+                    {i.title} × {i.quantity}
+                  </span>
+                  <Money vnd={i.unitPriceVnd * i.quantity} />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        {order.payments?.[0] && (
-          <p style={{ fontSize: 14, color: "var(--mkt-muted)" }}>
-            Payment: {order.payments[0].provider} · {order.payments[0].status}
-          </p>
+            {order.payments?.[0] && (
+              <p className="muted">
+                Payment: {order.payments[0].provider} · {order.payments[0].status}
+              </p>
+            )}
+            {error && <div className="error-banner">{error}</div>}
+            {order.status === "PENDING_PAYMENT" && (
+              <button className="btn-primary" style={{ width: "100%" }} disabled={busy} onClick={pay}>
+                Thanh toán
+              </button>
+            )}
+            {order.status === "COMPLETED" && !order.review && (
+              <div className="card" style={{ marginTop: 12 }}>
+                <p style={{ marginTop: 0 }}>Đánh giá đơn</p>
+                <label className="field">
+                  Sao
+                  <input
+                    type="number"
+                    min={1}
+                    max={5}
+                    value={rating}
+                    onChange={(e) => setRating(Number(e.target.value))}
+                  />
+                </label>
+                <button className="btn-primary" style={{ width: "100%" }} disabled={busy} onClick={review}>
+                  Gửi review
+                </button>
+              </div>
+            )}
+            <p style={{ marginTop: 12 }}>
+              <Link href="/" style={{ color: "var(--pfc-primary)" }}>
+                ← Marketplace
+              </Link>
+            </p>
+          </>
         )}
-        {error && <div className="mkt-error">{error}</div>}
-        {order.status === "PENDING_PAYMENT" && (
-          <button className="mkt-btn" disabled={busy} onClick={pay}>
-            {busy ? "Đang chuyển…" : "Thanh toán (Mock VNPAY)"}
-          </button>
-        )}
-        {order.status === "COMPLETED" && !order.review && (
-          <div className="mkt-card" style={{ marginTop: 12 }}>
-            <p style={{ marginTop: 0 }}>Đánh giá đơn (BR-008)</p>
-            <label className="mkt-label">
-              Sao
-              <input
-                className="mkt-input"
-                type="number"
-                min={1}
-                max={5}
-                value={rating}
-                onChange={(e) => setRating(Number(e.target.value))}
-              />
-            </label>
-            <button className="mkt-btn" disabled={busy} onClick={review}>
-              Gửi review
-            </button>
-          </div>
-        )}
-      </main>
-      <BottomNav active="orders" />
-    </>
+      </div>
+      <BottomNav />
+    </div>
   );
 }

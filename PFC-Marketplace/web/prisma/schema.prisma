@@ -124,12 +124,16 @@ model MktListing {
   summary         String?
   description     String
   priceVnd        Int
+  compareAtVnd    Int?
   currency        String        @default("VND")
   inventoryQty    Int?
   deliveryMeta    String?
   serviceMeta     String?
   externalRefType String?
   externalRefId   String?
+  ratingAvg       Float         @default(0)
+  ratingCount     Int           @default(0)
+  coverTone       String        @default("violet")
   status          ListingStatus @default(DRAFT)
   publishedAt     DateTime?
   createdAt       DateTime      @default(now())

@@ -12,6 +12,10 @@ export async function GET(req: Request) {
       title: l.title,
       summary: l.summary,
       priceVnd: l.priceVnd,
+      compareAtVnd: l.compareAtVnd,
+      ratingAvg: l.ratingAvg,
+      ratingCount: l.ratingCount,
+      coverTone: l.coverTone,
       sellerName: l.seller.displayName,
     })),
   });

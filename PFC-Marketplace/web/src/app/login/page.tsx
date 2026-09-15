@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { PfcLogo, StatusBar } from "@/components/ui";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,15 +11,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("Buyer-PFC-2026");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.user) router.replace("/");
-      })
-      .catch(() => undefined);
-  }, [router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,51 +32,47 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mkt-section" style={{ paddingTop: 40 }}>
-      <p className="mkt-brand" style={{ color: "var(--mkt-accent)" }}>
-        PFC Marketplace
-      </p>
-      <h1
-        style={{
-          fontFamily: "var(--font-display)",
-          fontSize: "1.8rem",
-          margin: "10px 0 8px",
-        }}
-      >
-        Chào mừng trở lại
-      </h1>
-      <p style={{ color: "var(--mkt-muted)", marginBottom: 20 }}>
-        Đăng nhập để mua, bán và theo dõi đơn hàng trong Digital Hub.
-      </p>
-      <form onSubmit={onSubmit} className="mkt-card">
-        {error && <div className="mkt-error">{error}</div>}
-        <label className="mkt-label">
-          Email
-          <input className="mkt-input" value={email} onChange={(e) => setEmail(e.target.value)} />
-        </label>
-        <label className="mkt-label">
-          Mật khẩu
-          <input
-            className="mkt-input"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </label>
-        <button className="mkt-btn" disabled={loading}>
-          {loading ? "Đang đăng nhập…" : "Đăng nhập"}
-        </button>
-      </form>
-      <p style={{ marginTop: 16, fontSize: 13, color: "var(--mkt-muted)" }}>
-        Demo: buyer@pfc.vn / seller@pfc.vn / admin@pfc.vn
-        <br />
-        Mật khẩu: Buyer-PFC-2026 · Seller-PFC-2026 · Admin-PFC-2026
-      </p>
-      <p style={{ marginTop: 12 }}>
-        <Link href="/" style={{ color: "var(--mkt-accent)" }}>
-          Xem catalog (cần đăng nhập để mua)
-        </Link>
-      </p>
-    </main>
+    <div className="phone-scroll no-nav">
+      <StatusBar />
+      <div className="page-pad" style={{ paddingTop: 28 }}>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <PfcLogo size={72} />
+        </div>
+        <h1 className="page-title" style={{ textAlign: "center" }}>
+          Chào mừng trở lại!
+        </h1>
+        <p className="page-sub" style={{ textAlign: "center" }}>
+          Đăng nhập vào Personal Finance Club Marketplace
+        </p>
+        <form className="card" onSubmit={onSubmit}>
+          {error && <div className="error-banner">{error}</div>}
+          <label className="field">
+            Email hoặc số điện thoại
+            <input value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <label className="field">
+            Mật khẩu
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+          <button className="btn-primary" style={{ width: "100%" }} disabled={loading}>
+            {loading ? "Đang đăng nhập…" : "Đăng nhập"}
+          </button>
+        </form>
+        <p className="muted" style={{ textAlign: "center", marginTop: 14 }}>
+          Demo: buyer@pfc.vn / seller@pfc.vn / admin@pfc.vn
+          <br />
+          Buyer-PFC-2026 · Seller-PFC-2026 · Admin-PFC-2026
+        </p>
+        <p style={{ textAlign: "center" }}>
+          <Link href="/" style={{ color: "var(--pfc-primary)", fontWeight: 650 }}>
+            Xem Marketplace
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 }

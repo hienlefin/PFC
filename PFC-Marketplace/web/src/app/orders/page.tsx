@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BottomNav, Money } from "@/components/ui";
+import { BottomNav, Money, StatusBar } from "@/components/ui";
 
 type Order = {
   id: string;
   status: string;
   totalVnd: number;
-  createdAt: string;
   items: { title: string; quantity: number; unitPriceVnd: number }[];
 };
 
@@ -29,33 +28,31 @@ export default function OrdersPage() {
   }, [router]);
 
   return (
-    <>
-      <main className="mkt-section" style={{ paddingTop: 24 }}>
-        <h1 style={{ fontFamily: "var(--font-display)" }}>Đơn của tôi</h1>
+    <div className="phone-scroll">
+      <StatusBar />
+      <div className="page-pad">
+        <h1 className="page-title">Đơn hàng</h1>
         {items.length === 0 ? (
-          <div className="mkt-card">Chưa có đơn.</div>
+          <div className="card muted">Chưa có đơn.</div>
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {items.map((o) => (
-              <Link
-                key={o.id}
-                href={`/orders/${o.id}`}
-                className="mkt-card"
-                style={{ textDecoration: "none", color: "inherit" }}
-              >
+              <Link key={o.id} href={`/orders/${o.id}`} className="card">
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span className="mkt-chip">{o.status}</span>
-                  <Money vnd={o.totalVnd} />
+                  <span className="tag">{o.status}</span>
+                  <span className="price">
+                    <Money vnd={o.totalVnd} />
+                  </span>
                 </div>
-                <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--mkt-muted)" }}>
+                <p className="muted" style={{ margin: "8px 0 0" }}>
                   {o.items.map((i) => i.title).join(", ")}
                 </p>
               </Link>
             ))}
           </div>
         )}
-      </main>
-      <BottomNav active="orders" />
-    </>
+      </div>
+      <BottomNav />
+    </div>
   );
 }

@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { BottomNav, Money, typeLabel } from "@/components/ui";
+import { useEffect, useMemo, useState } from "react";
+import {
+  BottomNav,
+  Money,
+  PfcLogo,
+  StatusBar,
+  coverEmoji,
+  discountPct,
+} from "@/components/ui";
 
 type Listing = {
   id: string;
@@ -10,131 +17,126 @@ type Listing = {
   title: string;
   summary: string | null;
   priceVnd: number;
+  compareAtVnd?: number | null;
+  ratingAvg?: number;
+  ratingCount?: number;
+  coverTone?: string;
   sellerName: string;
 };
 
-type User = { name: string; role: string } | null;
+const CATS = [
+  { key: "", label: "Tất cả", icon: "✨" },
+  { key: "COURSE", label: "Khóa học", icon: "🎓" },
+  { key: "PHYSICAL", label: "Sách", icon: "📚" },
+  { key: "SERVICE", label: "Dịch vụ", icon: "🛠️" },
+  { key: "EVENT_TICKET", label: "Sự kiện", icon: "📅" },
+] as const;
 
-export default function HomePage() {
+export default function MarketplaceHomePage() {
   const [items, setItems] = useState<Listing[]>([]);
-  const [user, setUser] = useState<User>(null);
-  const [type, setType] = useState<string>("");
+  const [type, setType] = useState("");
+  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/auth/me")
-      .then((r) => r.json())
-      .then((d) => setUser(d.user));
-  }, []);
-
-  useEffect(() => {
     setLoading(true);
-    const q = type ? `?type=${type}` : "";
-    fetch(`/api/listings${q}`)
+    const params = type ? `?type=${type}` : "";
+    fetch(`/api/listings${params}`)
       .then((r) => r.json())
       .then((d) => setItems(d.items || []))
       .finally(() => setLoading(false));
   }, [type]);
 
-  return (
-    <>
-      <header className="mkt-hero">
-        <div className="mkt-brand">PFC Marketplace</div>
-        <h1>Trao đổi giá trị trong cộng đồng</h1>
-        <p>Sản phẩm · Digital · Dịch vụ — thanh toán VND, audit đầy đủ.</p>
-        <div style={{ marginTop: 14, fontSize: 13, opacity: 0.95 }}>
-          {user ? (
-            <span>
-              Xin chào {user.name} · {user.role}{" "}
-              <button
-                type="button"
-                onClick={async () => {
-                  await fetch("/api/auth/logout", { method: "POST" });
-                  window.location.href = "/login";
-                }}
-                style={{
-                  marginLeft: 8,
-                  background: "transparent",
-                  border: "1px solid rgba(255,255,255,.5)",
-                  color: "#fff",
-                  borderRadius: 999,
-                  padding: "2px 10px",
-                  cursor: "pointer",
-                }}
-              >
-                Thoát
-              </button>
-            </span>
-          ) : (
-            <Link href="/login" style={{ color: "#fff", textDecoration: "underline" }}>
-              Đăng nhập để mua
-            </Link>
-          )}
-        </div>
-      </header>
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter(
+      (i) =>
+        i.title.toLowerCase().includes(needle) ||
+        (i.summary || "").toLowerCase().includes(needle),
+    );
+  }, [items, q]);
 
-      <section className="mkt-section">
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          {[
-            ["", "Tất cả"],
-            ["PHYSICAL", "Vật lý"],
-            ["DIGITAL", "Digital"],
-            ["SERVICE", "Dịch vụ"],
-          ].map(([v, label]) => (
+  return (
+    <div className="phone-scroll">
+      <StatusBar />
+      <div className="top-row">
+        <PfcLogo />
+        <button type="button" className="icon-btn" aria-label="Thông báo">
+          🔔
+        </button>
+      </div>
+
+      <div className="page-pad">
+        <h1 className="page-title">Marketplace</h1>
+        <p className="page-sub">
+          Sản phẩm &amp; dịch vụ chất lượng cho hành trình phát triển của bạn
+        </p>
+
+        <label className="search-bar">
+          <span aria-hidden>🔍</span>
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Tìm sản phẩm, dịch vụ, khóa học..."
+          />
+        </label>
+
+        <div className="cat-row">
+          {CATS.map((c) => (
             <button
-              key={v || "all"}
+              key={c.key || "all"}
               type="button"
-              className="mkt-chip"
-              style={{
-                border: "none",
-                cursor: "pointer",
-                background: type === v ? "var(--mkt-accent)" : undefined,
-                color: type === v ? "#fff" : undefined,
-              }}
-              onClick={() => setType(v)}
+              className={`cat-item${type === c.key ? " active" : ""}`}
+              onClick={() => setType(c.key)}
             >
-              {label}
+              <span className="bubble">{c.icon}</span>
+              {c.label}
             </button>
           ))}
         </div>
 
+        <div className="section-head">
+          <h2>Sản phẩm nổi bật</h2>
+          <a href="#grid">Xem tất cả</a>
+        </div>
+
         {loading ? (
-          <p style={{ color: "var(--mkt-muted)" }}>Đang tải catalog…</p>
-        ) : items.length === 0 ? (
-          <div className="mkt-card">Chưa có listing Published.</div>
+          <p className="muted">Đang tải…</p>
         ) : (
-          <div style={{ display: "grid", gap: 12 }}>
-            {items.map((item) => (
-              <Link
-                key={item.id}
-                href={`/listings/${item.id}`}
-                className="mkt-card"
-                style={{ textDecoration: "none", color: "inherit" }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                  <span className="mkt-chip">{typeLabel(item.type)}</span>
-                  <strong>
-                    <Money vnd={item.priceVnd} />
-                  </strong>
-                </div>
-                <h2
-                  style={{
-                    fontSize: "1.05rem",
-                    margin: "10px 0 4px",
-                    fontFamily: "var(--font-display)",
-                  }}
-                >
-                  {item.title}
-                </h2>
-                <p style={{ margin: 0, color: "var(--mkt-muted)", fontSize: 14 }}>
-                  {item.summary || item.sellerName}
-                </p>
-              </Link>
-            ))}
+          <div className="product-grid" id="grid">
+            {filtered.map((item) => {
+              const pct = discountPct(item.priceVnd, item.compareAtVnd);
+              return (
+                <Link key={item.id} href={`/listings/${item.id}`} className="product-card">
+                  <div className={`product-cover ${item.coverTone || "violet"}`}>
+                    {coverEmoji(item.type)}
+                  </div>
+                  <div className="product-body">
+                    <h3>{item.title}</h3>
+                    <div className="price">
+                      <Money vnd={item.priceVnd} />
+                    </div>
+                    {pct != null && (
+                      <div className="price-row">
+                        <span className="price-old">
+                          <Money vnd={item.compareAtVnd!} />
+                        </span>
+                        <span className="discount-pill">-{pct}%</span>
+                      </div>
+                    )}
+                    <div className="rating">
+                      <span className="star">★</span> {(item.ratingAvg ?? 0).toFixed(1)} (
+                      {item.ratingCount ?? 0})
+                    </div>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
-      </section>
-      <BottomNav active="home" />
-    </>
+      </div>
+      <BottomNav />
+    </div>
   );
 }

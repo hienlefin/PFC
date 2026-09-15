@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { BottomNav, Money, typeLabel } from "@/components/ui";
+import {
+  BottomNav,
+  Money,
+  StatusBar,
+  coverEmoji,
+  discountPct,
+} from "@/components/ui";
 
 type Listing = {
   id: string;
@@ -12,9 +18,13 @@ type Listing = {
   summary: string | null;
   description: string;
   priceVnd: number;
+  compareAtVnd: number | null;
   deliveryMeta: string | null;
   serviceMeta: string | null;
   inventoryQty: number | null;
+  ratingAvg: number;
+  ratingCount: number;
+  coverTone: string;
   seller: { displayName: string };
 };
 
@@ -35,7 +45,7 @@ export default function ListingDetailPage() {
       .catch((e) => setError(e.message));
   }, [id]);
 
-  async function addCart() {
+  async function addCart(thenBuy: boolean) {
     setBusy(true);
     setError(null);
     const res = await fetch("/api/cart", {
@@ -53,56 +63,96 @@ export default function ListingDetailPage() {
       setError(data.error || "Không thêm được giỏ");
       return;
     }
-    router.push("/cart");
+    router.push(thenBuy ? "/cart" : "/cart");
   }
 
   if (error && !item) {
     return (
-      <main className="mkt-section">
-        <div className="mkt-error">{error}</div>
-        <Link href="/">← Catalog</Link>
-      </main>
+      <div className="phone-scroll">
+        <StatusBar />
+        <div className="page-pad">
+          <div className="error-banner">{error}</div>
+          <Link href="/">← Marketplace</Link>
+        </div>
+      </div>
     );
   }
 
   if (!item) {
-    return <main className="mkt-section">Đang tải…</main>;
+    return (
+      <div className="phone-scroll">
+        <StatusBar />
+        <div className="page-pad muted">Đang tải…</div>
+      </div>
+    );
   }
 
+  const pct = discountPct(item.priceVnd, item.compareAtVnd);
+  const inStock = item.inventoryQty == null || item.inventoryQty > 0;
+
   return (
-    <>
-      <main className="mkt-section" style={{ paddingTop: 24 }}>
-        <Link href="/" style={{ color: "var(--mkt-accent)", fontSize: 14 }}>
-          ← Catalog
-        </Link>
-        <div style={{ marginTop: 12 }} className="mkt-chip">
-          {typeLabel(item.type)}
-        </div>
-        <h1 style={{ fontFamily: "var(--font-display)", fontSize: "1.6rem", margin: "10px 0" }}>
-          {item.title}
-        </h1>
-        <p style={{ color: "var(--mkt-muted)", marginTop: 0 }}>{item.seller.displayName}</p>
-        <p style={{ fontSize: "1.25rem", fontWeight: 700 }}>
-          <Money vnd={item.priceVnd} />
-        </p>
-        <div className="mkt-card" style={{ marginTop: 12 }}>
-          <p style={{ marginTop: 0 }}>{item.description}</p>
-          {item.deliveryMeta && (
-            <p style={{ color: "var(--mkt-muted)", fontSize: 14 }}>Giao: {item.deliveryMeta}</p>
-          )}
-          {item.serviceMeta && (
-            <p style={{ color: "var(--mkt-muted)", fontSize: 14 }}>Phạm vi: {item.serviceMeta}</p>
-          )}
-          {item.inventoryQty != null && (
-            <p style={{ color: "var(--mkt-muted)", fontSize: 14 }}>Tồn: {item.inventoryQty}</p>
-          )}
-        </div>
-        {error && <div className="mkt-error" style={{ marginTop: 12 }}>{error}</div>}
-        <button className="mkt-btn" style={{ marginTop: 16 }} disabled={busy} onClick={addCart}>
-          {busy ? "Đang thêm…" : "Thêm vào giỏ"}
+    <div className="phone-scroll">
+      <StatusBar />
+      <div className="top-row">
+        <button type="button" className="icon-btn" onClick={() => router.back()} aria-label="Back">
+          ←
         </button>
-      </main>
-      <BottomNav active="home" />
-    </>
+        <div style={{ display: "flex", gap: 4 }}>
+          <button type="button" className="icon-btn" aria-label="Yêu thích">
+            ♡
+          </button>
+          <Link href="/cart" className="icon-btn" aria-label="Giỏ hàng">
+            🛒
+          </Link>
+        </div>
+      </div>
+
+      <div className={`detail-hero product-cover ${item.coverTone || "violet"}`}>
+        {coverEmoji(item.type)}
+      </div>
+
+      <div className="detail-pad">
+        <h1 style={{ margin: "0 0 6px", fontSize: 22, fontWeight: 800 }}>{item.title}</h1>
+        <p className="muted" style={{ margin: 0 }}>
+          {item.summary || item.seller.displayName}
+        </p>
+        <div className="rating" style={{ marginTop: 8 }}>
+          <span className="star">★</span> {item.ratingAvg.toFixed(1)} ({item.ratingCount} đánh giá)
+        </div>
+
+        <div className="price-row" style={{ marginTop: 12 }}>
+          <span className="price" style={{ fontSize: 22 }}>
+            <Money vnd={item.priceVnd} />
+          </span>
+          {item.compareAtVnd != null && item.compareAtVnd > item.priceVnd && (
+            <span className="price-old">
+              <Money vnd={item.compareAtVnd} />
+            </span>
+          )}
+          {pct != null && <span className="discount-pill">-{pct}%</span>}
+        </div>
+
+        <div className="tag-row">
+          {item.serviceMeta && <span className="tag">📦 {item.serviceMeta}</span>}
+          <span className="tag">{inStock ? "✅ Còn hàng" : "⛔ Hết hàng"}</span>
+          {item.deliveryMeta && <span className="tag">🚚 {item.deliveryMeta}</span>}
+        </div>
+
+        <h2 style={{ fontSize: 16, margin: "8px 0" }}>Mô tả sản phẩm</h2>
+        <p style={{ margin: 0, color: "var(--pfc-muted)", lineHeight: 1.5 }}>{item.description}</p>
+
+        {error && <div className="error-banner">{error}</div>}
+      </div>
+
+      <div className="sticky-actions">
+        <button className="btn-outline" disabled={busy} onClick={() => addCart(false)}>
+          Thêm vào giỏ
+        </button>
+        <button className="btn-primary" disabled={busy} onClick={() => addCart(true)}>
+          Mua ngay
+        </button>
+      </div>
+      <BottomNav />
+    </div>
   );
 }
