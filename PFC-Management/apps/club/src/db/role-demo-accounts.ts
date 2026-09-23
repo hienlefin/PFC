@@ -69,18 +69,65 @@ function ensureTeam(
  * Ensure every ADR-003 role has a loginable demo account on the primary club.
  * Safe to call on every boot / `npm run db:seed`.
  */
+/** Legacy unaccented duplicate from older seeds → Ban Điều hành. */
+function healLegacyBanChuyenMon(clubId: string): void {
+  const legacy = db
+    .select()
+    .from(teams)
+    .where(
+      and(
+        eq(teams.clubId, clubId),
+        eq(teams.nameNormalized, normalizeTeamName("Ban Chuyen mon")),
+      ),
+    )
+    .all()[0];
+  if (!legacy) return;
+
+  const targetName = "Ban Điều hành";
+  const targetNorm = normalizeTeamName(targetName);
+  const existing = db
+    .select()
+    .from(teams)
+    .where(and(eq(teams.clubId, clubId), eq(teams.nameNormalized, targetNorm)))
+    .all()[0];
+
+  if (!existing) {
+    db.update(teams)
+      .set({
+        name: sanitizeTeamName(targetName),
+        nameNormalized: targetNorm,
+        description: "Ban điều hành / executive",
+        updatedAt: new Date(),
+      })
+      .where(eq(teams.id, legacy.id))
+      .run();
+    return;
+  }
+
+  // Merge memberships onto existing Ban Điều hành, then drop legacy row.
+  db.update(memberships)
+    .set({ teamId: existing.id })
+    .where(eq(memberships.teamId, legacy.id))
+    .run();
+  db.delete(teams).where(eq(teams.id, legacy.id)).run();
+}
+
 export function ensureRoleDemoAccounts(clubId: string): void {
   const hash = bcrypt.hashSync(DEMO_PASSWORD, 8);
+
+  healLegacyBanChuyenMon(clubId);
 
   const teamCm = ensureTeam(clubId, "Ban Chuyên môn", "Research & learning");
   const teamTt = ensureTeam(clubId, "Ban Truyền thông", "Media & content");
   const teamSk = ensureTeam(clubId, "Ban Sự kiện", "Events ops");
+  const teamDh = ensureTeam(clubId, "Ban Điều hành", "Ban điều hành / executive");
   const teamDn = ensureTeam(clubId, "Ban Đối ngoại", "Partnerships");
 
   const teamByName: Record<string, string> = {
     "Ban Chuyên môn": teamCm,
     "Ban Truyền thông": teamTt,
     "Ban Sự kiện": teamSk,
+    "Ban Điều hành": teamDh,
     "Ban Đối ngoại": teamDn,
   };
 

@@ -12,8 +12,9 @@ export function sanitizeTeamName(raw: string): string {
   return raw.trim().replace(/\s+/g, " ");
 }
 
-/** Canonical ban names for ban_* positions (display form). */
+/** Canonical ban names for ban_* / leader positions (display form). */
 export const POSITION_DEFAULT_TEAM: Partial<Record<Position, string>> = {
+  leader: "Ban Điều hành",
   ban_chuyen_mon: "Ban Chuyên môn",
   ban_truyen_thong: "Ban Truyền thông",
   ban_su_kien: "Ban Sự kiện",

@@ -33,7 +33,7 @@ export const ROLE_DEMO_ACCOUNTS: readonly RoleDemoAccount[] = [
     fullName: "Tran Ban Dieu Hanh",
     position: "leader",
     status: "active",
-    teamName: "Ban Đối ngoại",
+    teamName: "Ban Điều hành",
     labelVi: "Ban điều hành (leader)",
   },
   {

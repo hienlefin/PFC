@@ -593,6 +593,7 @@ export function ensureHrDemoMembers(clubId: string): void {
     return id;
   };
 
+  const teamDh = ensureTeam("Ban Điều hành", "Ban điều hành / executive");
   const teamCm = ensureTeam("Ban Chuyên môn", "Research & learning");
   const teamTt = ensureTeam("Ban Truyền thông", "Media & content");
   const teamSk = ensureTeam("Ban Sự kiện", "Events ops");
@@ -611,7 +612,7 @@ export function ensureHrDemoMembers(clubId: string): void {
       email: "21520011@pfc.vn",
       fullName: "Nguyễn Đức Tuấn",
       position: "leader",
-      teamId: teamTt,
+      teamId: teamDh,
       studentCode: "21520011",
     },
     {

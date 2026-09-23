@@ -14,6 +14,7 @@ describe("team-policy", () => {
   });
 
   it("maps trưởng ban positions to canonical team names", () => {
+    expect(defaultTeamNameForPosition("leader")).toBe("Ban Điều hành");
     expect(defaultTeamNameForPosition("ban_truyen_thong")).toBe(
       "Ban Truyền thông",
     );

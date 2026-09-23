@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
-import { BottomNav } from "@/components/MobileChrome";
+import { AppShell } from "@/components/AppShell";
 import "./globals.css";
 
 const plusJakarta = Plus_Jakarta_Sans({
@@ -30,14 +30,7 @@ export default function RootLayout({
         <a className="skip-link" href="#main-content">
           Bỏ qua đến nội dung chính
         </a>
-        <div className="phone-shell">
-          <div className="phone-frame">
-            <div className="phone-scroll" id="main-content">
-              {children}
-            </div>
-            <BottomNav />
-          </div>
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );

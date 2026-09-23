@@ -641,6 +641,7 @@ export function ensurePmDemoTasks(clubId: string): void {
 
   const teamRows = db.select().from(teams).where(eq(teams.clubId, clubId)).all();
   const needed = [
+    { name: "Ban Điều hành", description: "Executive" },
     { name: "Ban Chuyên môn", description: "Research" },
     { name: "Ban Truyền thông", description: "Media" },
     { name: "Ban Sự kiện", description: "Events / HR" },

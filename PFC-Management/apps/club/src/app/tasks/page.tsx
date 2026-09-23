@@ -1,1039 +1,1708 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
-import { AppHeader } from "@/components/MobileChrome";
-import { useClubData } from "@/components/useClubData";
-import { canTransitionTask, type TaskStatus } from "@/domain/task-fsm";
+import { PfcLogo } from "@/components/MobileChrome";
+import {
+  BRANCHES,
+  CURRENT_USER,
+  DEPARTMENTS,
+  INITIAL_TASKS,
+  MEMBERS,
+  branchById,
+  defaultSupervisorForAssignee,
+  departmentById,
+  memberById,
+  supervisors,
+} from "./task-data";
+import {
+  canAssignTask,
+  canRemindReview,
+  canReview,
+  canSubmit,
+  formatDeadlineFull,
+  formatDeadlineRelative,
+  formatLateDuration,
+  historyIcon,
+  isDueSoon,
+  isOpenStatus,
+  isOverdue,
+  isSubmitted,
+  isValidHttpUrl,
+  latestReviewComment,
+  needsReminder,
+  sortByDeadlineAsc,
+  statusLabel,
+} from "./task-helpers";
+import {
+  createTask,
+  notifyAssignee,
+  notifySupervisor,
+  reviewTask,
+  sendDeadlineReminder,
+  sendReviewReminder,
+  submitTask,
+} from "./task-api";
+import type {
+  BranchId,
+  EvidenceFile,
+  Priority,
+  ReviewResult,
+  Submission,
+  Task,
+} from "./task-types";
 
-const COL_LABEL: Record<string, string> = {
-  backlog: "Backlog",
-  todo: "Cần làm",
-  in_progress: "Đang làm",
-  review: "Chờ duyệt",
-  done: "Hoàn thành",
-};
+type Screen = "home" | "branch" | "nudge" | "review_queue";
+type BranchTab = "open" | "submitted" | "nudge" | "done";
 
-const STATUS_PASTEL: Record<string, { label: string; cls: string }> = {
-  backlog: { label: "⏳ Chưa làm", cls: "tm-badge backlog" },
-  todo: { label: "⏳ Chưa làm", cls: "tm-badge backlog" },
-  in_progress: { label: "🔄 Đang làm", cls: "tm-badge doing" },
-  review: { label: "🔍 Chờ duyệt", cls: "tm-badge review" },
-  done: { label: "✅ Hoàn thành", cls: "tm-badge done" },
-};
-
-const COL_ORDER = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "review",
-  "done",
-] as const;
-
-const PRIORITY_UI: Record<string, { label: string; cls: string }> = {
-  high: { label: "🔴 High", cls: "tm-prio high" },
-  medium: { label: "🟡 Medium", cls: "tm-prio mid" },
-  low: { label: "🟢 Low", cls: "tm-prio low" },
-};
-
-type BoardTask = {
-  id: string;
+type AssignForm = {
   title: string;
-  status: string;
-  priority: string;
-  description?: string;
-  deadline?: string | Date | null;
-  progress?: number;
-  progressPct?: number;
-  assigneeId?: string | null;
-  assigneeName?: string | null;
-  assigneeInitials?: string | null;
-  teamId?: string | null;
-  teamName?: string | null;
-  activityId?: string | null;
-  activityTitle?: string | null;
-  checklistDone?: number;
-  checklistTotal?: number;
-  commentCount?: number;
-  hasProof?: boolean;
-  proofUrl?: string | null;
-  subAssignees?: { id: string; name: string; initials: string }[];
-};
-
-type ChecklistItem = {
-  id: string;
-  title: string;
-  done: boolean;
-  assigneeId?: string | null;
-  assigneeName?: string | null;
-  assigneeInitials?: string | null;
-  deadline?: string | Date | null;
-};
-
-type DetailState = {
-  task: BoardTask;
-  checklist: ChecklistItem[];
-  comments: {
-    id: string;
-    body: string;
-    authorName?: string | null;
-    createdAt?: string | Date;
-  }[];
-  activity: { id: string; text: string; createdAt?: string | Date }[];
-};
-
-type SubDraft = {
-  key: string;
-  title: string;
+  branchId: BranchId;
   assigneeId: string;
-  deadline: string;
+  supervisorId: string;
+  date: string;
+  time: string;
+  priority: Priority;
+  note: string;
 };
 
-function formatDue(d?: string | Date | null) {
-  if (!d) return "Chưa có hạn";
-  try {
-    return new Date(d).toLocaleDateString("vi-VN", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
+type AssignErrors = Partial<
+  Record<"title" | "assigneeId" | "deadline", string>
+>;
+
+type SubmitForm = {
+  links: string[];
+  files: EvidenceFile[];
+  note: string;
+};
+
+type SubmitErrors = Partial<Record<"evidence" | `link_${number}`, string>>;
+
+type ReviewForm = {
+  result: ReviewResult | null;
+  comment: string;
+  date: string;
+  time: string;
+};
+
+type ReviewErrors = Partial<
+  Record<"result" | "comment" | "deadline", string>
+>;
+
+function emptyAssign(branchId?: BranchId): AssignForm {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  now.setHours(now.getHours() + 2);
+  return {
+    title: "",
+    branchId: branchId ?? "club_management",
+    assigneeId: "",
+    supervisorId: "",
+    date: now.toISOString().slice(0, 10),
+    time: now.toTimeString().slice(0, 5),
+    priority: "medium",
+    note: "",
+  };
 }
 
-function teamIcon(name: string) {
-  const n = name.toLowerCase();
-  if (n.includes("truyền") || n.includes("media")) return "📣";
-  if (n.includes("chuyên") || n.includes("content")) return "📚";
-  if (n.includes("đối ngoại") || n.includes("partner")) return "🤝";
-  if (n.includes("sự kiện") || n.includes("hr") || n.includes("event"))
-    return "🎪";
-  return "🏷️";
+function emptySubmit(): SubmitForm {
+  return { links: [""], files: [], note: "" };
 }
 
-function shortTeamLabel(name: string) {
-  const n = name.toLowerCase();
-  if (n.includes("truyền")) return "Media";
-  if (n.includes("chuyên")) return "Content";
-  if (n.includes("đối ngoại")) return "Đối ngoại";
-  if (n.includes("sự kiện") || n.includes("hr")) return "HR";
-  return name.replace(/^Ban\s+/i, "");
+function emptyReview(): ReviewForm {
+  const now = new Date();
+  now.setMinutes(0, 0, 0);
+  now.setHours(now.getHours() + 48);
+  return {
+    result: null,
+    comment: "",
+    date: now.toISOString().slice(0, 10),
+    time: now.toTimeString().slice(0, 5),
+  };
+}
+
+function firstName(full: string) {
+  const parts = full.trim().split(/\s+/);
+  return parts[parts.length - 1] ?? full;
+}
+
+function fileId() {
+  return `f-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export default function TasksPage() {
-  const { data, error, post, reload, can } = useClubData();
-  const [mode, setMode] = useState<"board" | "timeline">("board");
-  const [teamFilter, setTeamFilter] = useState<string>("all");
-  const [detailId, setDetailId] = useState<string | null>(null);
-  const [detail, setDetail] = useState<DetailState | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [progressDraft, setProgressDraft] = useState(0);
-  const [proofLink, setProofLink] = useState("");
-  const [commentBody, setCommentBody] = useState("");
-  const [checkTitle, setCheckTitle] = useState("");
-  const [checkAssignee, setCheckAssignee] = useState("");
-  const [checkDeadline, setCheckDeadline] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
+  const [screen, setScreen] = useState<Screen>("home");
+  const [branchId, setBranchId] = useState<BranchId | null>(null);
+  const [branchTab, setBranchTab] = useState<BranchTab>("open");
+  const [showAssign, setShowAssign] = useState(false);
+  const [assignForm, setAssignForm] = useState<AssignForm>(emptyAssign());
+  const [assignErrors, setAssignErrors] = useState<AssignErrors>({});
+  const [submitTaskId, setSubmitTaskId] = useState<string | null>(null);
+  const [submitForm, setSubmitForm] = useState<SubmitForm>(emptySubmit());
+  const [submitErrors, setSubmitErrors] = useState<SubmitErrors>({});
+  const [reviewTaskId, setReviewTaskId] = useState<string | null>(null);
+  const [reviewForm, setReviewForm] = useState<ReviewForm>(emptyReview());
+  const [reviewErrors, setReviewErrors] = useState<ReviewErrors>({});
+  const [detailTaskId, setDetailTaskId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [frameEl, setFrameEl] = useState<Element | null>(null);
+  const [tick, setTick] = useState(0);
+  const [historyOpen, setHistoryOpen] = useState(true);
 
-  // Create form
-  const [cTitle, setCTitle] = useState("");
-  const [cActivityId, setCActivityId] = useState("");
-  const [cPriority, setCPriority] = useState("medium");
-  const [cDeadline, setCDeadline] = useState("");
-  const [cTeamId, setCTeamId] = useState("");
-  const [cSubs, setCSubs] = useState<SubDraft[]>([
-    { key: "s1", title: "", assigneeId: "", deadline: "" },
-  ]);
-
-  const scope = data?.taskScope;
-  const canManage = can("manage_tasks") || !!scope?.canManageTasks;
-  const canFilterAll = !!scope?.canFilterAllTeams;
-  const teams = data?.teams ?? [];
-  const members = (data?.members ?? []).filter((m) => m.status === "active");
-  const activities = data?.activities ?? [];
+  const allowAssign = canAssignTask(CURRENT_USER);
 
   useEffect(() => {
-    if (!scope) return;
-    if (scope.forcedTeamId) {
-      setTeamFilter(scope.forcedTeamId);
-      setCTeamId(scope.forcedTeamId);
-    }
-  }, [scope?.forcedTeamId]);
+    setFrameEl(document.querySelector(".phone-frame"));
+  }, []);
 
-  const deptTabs = useMemo(() => {
-    const tabs = canFilterAll
-      ? [{ id: "all", label: "All", icon: "✨", name: "Tất cả" }]
-      : [];
-    for (const t of teams) {
-      if (scope?.forcedTeamId && t.id !== scope.forcedTeamId) continue;
-      tabs.push({
-        id: t.id,
-        label: shortTeamLabel(t.name),
-        icon: teamIcon(t.name),
-        name: t.name,
-      });
-    }
-    return tabs;
-  }, [teams, canFilterAll, scope?.forcedTeamId]);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2800);
+    return () => clearTimeout(t);
+  }, [toast]);
 
-  const selectedTeamId =
-    teamFilter === "all" ? null : teamFilter || scope?.forcedTeamId || null;
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60_000);
+    return () => clearInterval(id);
+  }, []);
 
-  const membersForTeam = useMemo(() => {
-    const tid = cTeamId || selectedTeamId;
-    if (!tid) return members;
-    return members.filter((m) => m.teamId === tid);
-  }, [members, cTeamId, selectedTeamId]);
+  const now = useMemo(() => new Date(), [tick, tasks]);
 
-  function flattenBoard(): BoardTask[] {
-    const kanban = data?.kanban ?? {};
-    const out: BoardTask[] = [];
-    for (const col of COL_ORDER) {
-      for (const t of (kanban[col] ?? []) as BoardTask[]) out.push(t);
-    }
-    return out;
-  }
+  const openTasks = useMemo(() => tasks.filter(isOpenStatus), [tasks]);
+  const doneTasks = useMemo(
+    () => tasks.filter((t) => t.status === "done"),
+    [tasks],
+  );
+  const pendingReview = useMemo(
+    () =>
+      tasks
+        .filter((t) => isSubmitted(t) && canReview(t, CURRENT_USER))
+        .sort(sortByDeadlineAsc),
+    [tasks],
+  );
+  const nudgeTasks = useMemo(
+    () => tasks.filter((t) => needsReminder(t, now)).sort(sortByDeadlineAsc),
+    [tasks, now],
+  );
+  const nudgePending = useMemo(
+    () => nudgeTasks.filter((t) => !t.lastRemindedAt),
+    [nudgeTasks],
+  );
+  const nudgedCount = nudgeTasks.length - nudgePending.length;
 
-  const filteredKanban = useMemo(() => {
-    const kanban = data?.kanban ?? {};
-    const result: Record<string, BoardTask[]> = {};
-    for (const col of COL_ORDER) {
-      let items = (kanban[col] ?? []) as BoardTask[];
-      if (selectedTeamId) {
-        items = items.filter((t) => t.teamId === selectedTeamId);
-      }
-      result[col] = items;
-    }
-    return result;
-  }, [data?.kanban, selectedTeamId]);
-
-  const filteredTimeline = useMemo(() => {
-    let rows = data?.timeline ?? [];
-    if (selectedTeamId) {
-      const ids = new Set(
-        flattenBoard()
-          .filter((t) => t.teamId === selectedTeamId)
-          .map((t) => t.id),
-      );
-      rows = rows.filter((t) => ids.has(t.id));
-    }
-    return rows;
-  }, [data?.timeline, data?.kanban, selectedTeamId]);
-
-  async function loadDetail(taskId: string) {
-    setDetailLoading(true);
-    setMsg(null);
-    try {
-      const res = await fetch(
-        `/api/club?action=task_detail&taskId=${encodeURIComponent(taskId)}`,
-      );
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.message ?? "Không tải được task");
-      const d: DetailState = {
-        task: json.task,
-        checklist: json.checklist ?? [],
-        comments: json.comments ?? [],
-        activity: json.activity ?? [],
+  const branchStats = useMemo(() => {
+    return BRANCHES.map((b) => {
+      const all = tasks.filter((t) => t.branchId === b.id);
+      const open = all.filter(isOpenStatus);
+      const done = all.filter((t) => t.status === "done");
+      const waiting = all.filter(isSubmitted);
+      const overdue = open.filter((t) => isOverdue(t, now));
+      const soon = open.filter((t) => isDueSoon(t, now));
+      const total = all.length || 1;
+      const pct = Math.round((done.length / total) * 100);
+      return {
+        branch: b,
+        open: open.length,
+        done: done.length,
+        total: all.length,
+        overdue: overdue.length,
+        soon: soon.length,
+        waiting: waiting.length,
+        pct,
       };
-      setDetail(d);
-      setProgressDraft(d.task.progressPct ?? d.task.progress ?? 0);
-      setProofLink(d.task.proofUrl ?? "");
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Lỗi");
-      setDetail(null);
-    } finally {
-      setDetailLoading(false);
+    });
+  }, [tasks, now]);
+
+  const activeBranch = branchId ? branchById(branchId) : null;
+
+  const branchLists = useMemo(() => {
+    if (!branchId) {
+      return { open: [], submitted: [], nudge: [], done: [] };
+    }
+    const list = tasks.filter((t) => t.branchId === branchId);
+    return {
+      open: list.filter(isOpenStatus).sort(sortByDeadlineAsc),
+      submitted: list.filter(isSubmitted).sort(sortByDeadlineAsc),
+      nudge: list.filter((t) => needsReminder(t, now)).sort(sortByDeadlineAsc),
+      done: list.filter((t) => t.status === "done").sort(sortByDeadlineAsc),
+    };
+  }, [tasks, branchId, now]);
+
+  const branchAssignees = useMemo(() => {
+    if (!branchId) return 0;
+    const ids = new Set(
+      tasks
+        .filter((t) => t.branchId === branchId && isOpenStatus(t))
+        .map((t) => t.assigneeId),
+    );
+    return ids.size;
+  }, [tasks, branchId]);
+
+  const submitTarget = submitTaskId
+    ? tasks.find((t) => t.id === submitTaskId)
+    : null;
+  const reviewTarget = reviewTaskId
+    ? tasks.find((t) => t.id === reviewTaskId)
+    : null;
+  const detailTarget = detailTaskId
+    ? tasks.find((t) => t.id === detailTaskId)
+    : null;
+
+  function openBranch(id: BranchId) {
+    setBranchId(id);
+    setBranchTab("open");
+    setScreen("branch");
+  }
+
+  function openAssign(preset?: BranchId) {
+    setAssignForm(emptyAssign(preset ?? branchId ?? undefined));
+    setAssignErrors({});
+    setShowAssign(true);
+  }
+
+  function openSubmit(task: Task) {
+    setSubmitTaskId(task.id);
+    setSubmitForm(emptySubmit());
+    setSubmitErrors({});
+  }
+
+  function openReview(task: Task) {
+    setReviewTaskId(task.id);
+    setReviewForm(emptyReview());
+    setReviewErrors({});
+  }
+
+  async function remind(task: Task) {
+    if (task.lastRemindedAt) return;
+    const assignee = memberById(task.assigneeId);
+    const supervisor = memberById(task.supervisorId);
+    await sendDeadlineReminder(task.id, [task.assigneeId, task.supervisorId]);
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === task.id
+          ? { ...t, lastRemindedAt: new Date().toISOString() }
+          : t,
+      ),
+    );
+    setToast(
+      `Đã gửi nhắc tới ${firstName(assignee?.name ?? "TV")} và ${firstName(supervisor?.name ?? "TB")}`,
+    );
+  }
+
+  async function remindAll() {
+    const pending = nudgeTasks.filter((t) => !t.lastRemindedAt);
+    for (const t of pending) {
+      await sendDeadlineReminder(t.id, [t.assigneeId, t.supervisorId]);
+    }
+    const stamp = new Date().toISOString();
+    setTasks((prev) =>
+      prev.map((t) =>
+        pending.some((p) => p.id === t.id)
+          ? { ...t, lastRemindedAt: stamp }
+          : t,
+      ),
+    );
+    setToast(`Đã giục ${pending.length} việc`);
+  }
+
+  async function remindReview(task: Task) {
+    if (task.lastReviewRemindedAt) return;
+    await sendReviewReminder(task.id, task.supervisorId);
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === task.id
+          ? { ...t, lastReviewRemindedAt: new Date().toISOString() }
+          : t,
+      ),
+    );
+    const s = memberById(task.supervisorId);
+    setToast(`Đã nhắc ${firstName(s?.name ?? "take care")} duyệt`);
+  }
+
+  function validateAssign(): AssignErrors {
+    const err: AssignErrors = {};
+    if (!assignForm.title.trim()) err.title = "Nhập tên task";
+    if (!assignForm.assigneeId) err.assigneeId = "Chọn người thực hiện";
+    if (!assignForm.date || !assignForm.time) {
+      err.deadline = "Chọn đủ ngày và giờ deadline";
+    } else {
+      const due = new Date(`${assignForm.date}T${assignForm.time}:00`);
+      if (Number.isNaN(due.getTime()) || due.getTime() <= Date.now()) {
+        err.deadline = "Deadline phải sau thời điểm hiện tại";
+      }
+    }
+    return err;
+  }
+
+  async function submitAssign() {
+    const err = validateAssign();
+    setAssignErrors(err);
+    if (Object.keys(err).length) return;
+    if (!assignForm.supervisorId) return;
+
+    const dueDate = new Date(
+      `${assignForm.date}T${assignForm.time}:00`,
+    ).toISOString();
+    const created = await createTask({
+      title: assignForm.title,
+      branchId: assignForm.branchId,
+      assigneeId: assignForm.assigneeId,
+      supervisorId: assignForm.supervisorId,
+      dueDate,
+      priority: assignForm.priority,
+      note: assignForm.note,
+      actorId: CURRENT_USER.id,
+    });
+    await notifyAssignee(created.id);
+    setTasks((prev) => [created, ...prev]);
+    setShowAssign(false);
+    setBranchId(created.branchId);
+    setBranchTab("open");
+    setScreen("branch");
+    const a = memberById(created.assigneeId);
+    const s = memberById(created.supervisorId);
+    setToast(
+      `Đã giao task cho ${firstName(a?.name ?? "")} · Take care: ${firstName(s?.name ?? "")}`,
+    );
+  }
+
+  function validateSubmit(form: SubmitForm): SubmitErrors {
+    const err: SubmitErrors = {};
+    const links = form.links.map((l) => l.trim()).filter(Boolean);
+    form.links.forEach((l, i) => {
+      const v = l.trim();
+      if (v && !isValidHttpUrl(v)) err[`link_${i}`] = "Link không hợp lệ";
+    });
+    if (links.length === 0 && form.files.length === 0) {
+      err.evidence = "Thêm ít nhất 1 link hoặc tệp minh chứng";
+    }
+    return err;
+  }
+
+  async function confirmSubmit() {
+    if (!submitTarget) return;
+    const err = validateSubmit(submitForm);
+    setSubmitErrors(err);
+    if (Object.keys(err).length) return;
+
+    const next = await submitTask(submitTarget, {
+      links: submitForm.links,
+      files: submitForm.files,
+      note: submitForm.note,
+      actorId: CURRENT_USER.id,
+    });
+    await notifySupervisor(next.id);
+    setTasks((prev) => prev.map((t) => (t.id === next.id ? next : t)));
+    setSubmitTaskId(null);
+    const s = memberById(next.supervisorId);
+    setToast(`Đã nộp, chờ ${s?.name ?? "người duyệt"} duyệt`);
+  }
+
+  function validateReview(form: ReviewForm): ReviewErrors {
+    const err: ReviewErrors = {};
+    if (!form.result) err.result = "Chọn kết quả duyệt";
+    if (form.result === "revision" && !form.comment.trim()) {
+      err.comment = "Nhập nhận xét cần chỉnh sửa";
+    }
+    if (form.result === "redo" && !form.comment.trim()) {
+      err.comment = "Nhập lý do làm lại";
+    }
+    if (form.result === "revision" || form.result === "redo") {
+      if (form.result === "redo") {
+        if (!form.date || !form.time) {
+          err.deadline = "Chọn deadline mới";
+        } else {
+          const due = new Date(`${form.date}T${form.time}:00`);
+          if (Number.isNaN(due.getTime()) || due.getTime() <= Date.now()) {
+            err.deadline = "Deadline phải sau thời điểm hiện tại";
+          }
+        }
+      } else if (form.date && form.time) {
+        const due = new Date(`${form.date}T${form.time}:00`);
+        if (Number.isNaN(due.getTime()) || due.getTime() <= Date.now()) {
+          err.deadline = "Deadline phải sau thời điểm hiện tại";
+        }
+      }
+    }
+    return err;
+  }
+
+  async function confirmReview() {
+    if (!reviewTarget) return;
+    const err = validateReview(reviewForm);
+    setReviewErrors(err);
+    if (Object.keys(err).length || !reviewForm.result) return;
+
+    let newDueDate: string | null = null;
+    if (
+      (reviewForm.result === "revision" || reviewForm.result === "redo") &&
+      reviewForm.date &&
+      reviewForm.time
+    ) {
+      newDueDate = new Date(
+        `${reviewForm.date}T${reviewForm.time}:00`,
+      ).toISOString();
+    }
+
+    const next = await reviewTask(reviewTarget, {
+      result: reviewForm.result,
+      comment: reviewForm.comment,
+      reviewedBy: CURRENT_USER.id,
+      newDueDate,
+    });
+    await notifyAssignee(next.id);
+    setTasks((prev) => prev.map((t) => (t.id === next.id ? next : t)));
+    setReviewTaskId(null);
+    const a = memberById(next.assigneeId);
+    if (reviewForm.result === "approved") {
+      setToast("Đã duyệt hoàn thành");
+    } else if (reviewForm.result === "revision") {
+      setToast(
+        `Đã gửi yêu cầu chỉnh sửa cho ${firstName(a?.name ?? "thành viên")}`,
+      );
+    } else {
+      setToast(`Đã yêu cầu ${firstName(a?.name ?? "thành viên")} làm lại`);
     }
   }
 
-  useEffect(() => {
-    if (!detailId) {
-      setDetail(null);
-      return;
-    }
-    void loadDetail(detailId);
-  }, [detailId]);
-
-  async function run(action: Record<string, unknown>, ok?: string) {
-    setBusy(true);
-    setMsg(null);
-    try {
-      await post(action);
-      if (ok) setMsg(ok);
-      if (detailId) await loadDetail(detailId);
-      else await reload();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Thất bại");
-    } finally {
-      setBusy(false);
-    }
+  function onPickFiles(list: FileList | null) {
+    if (!list?.length) return;
+    const added: EvidenceFile[] = Array.from(list).map((f) => ({
+      id: fileId(),
+      name: f.name,
+      url: URL.createObjectURL(f),
+      type: f.type.startsWith("image/") ? "image" : "file",
+    }));
+    setSubmitForm((f) => ({ ...f, files: [...f.files, ...added] }));
+    setSubmitErrors((e) => {
+      const n = { ...e };
+      delete n.evidence;
+      return n;
+    });
   }
 
-  function resetCreate() {
-    setCTitle("");
-    setCActivityId("");
-    setCPriority("medium");
-    setCDeadline("");
-    setCTeamId(scope?.forcedTeamId ?? selectedTeamId ?? "");
-    setCSubs([{ key: "s1", title: "", assigneeId: "", deadline: "" }]);
-  }
+  const portalTarget = frameEl;
 
-  async function submitCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setMsg(null);
-    try {
-      const subTasks = cSubs
-        .filter((s) => s.title.trim())
-        .map((s) => ({
-          title: s.title.trim(),
-          assigneeId: s.assigneeId || null,
-          deadline: s.deadline || null,
-        }));
-      await post({
-        action: "create_task",
-        title: cTitle.trim(),
-        priority: cPriority,
-        deadline: cDeadline || null,
-        teamId: cTeamId || undefined,
-        activityId: cActivityId || null,
-        subTasks,
-      });
-      setCreateOpen(false);
-      resetCreate();
-      setMsg("Đã tạo dự án / task chính");
-      await reload();
-    } catch (err) {
-      setMsg(err instanceof Error ? err.message : "Tạo thất bại");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const listForBranchTab =
+    branchTab === "open"
+      ? branchLists.open
+      : branchTab === "submitted"
+        ? branchLists.submitted
+        : branchTab === "nudge"
+          ? branchLists.nudge
+          : branchLists.done;
 
   return (
-    <>
-      <AppHeader title="Công việc" />
-      {error && (
-        <div className="error-banner">
-          {error}{" "}
-          <Link href="/login" className="btn-ghost">
-            Đăng nhập
-          </Link>
-        </div>
-      )}
-
-      <div className="tm-hero">
-        <div>
-          <p className="tm-hero-kicker">Task Hub</p>
-          <h1 className="tm-hero-title">Dự án & đầu việc</h1>
-          <p className="tm-hero-sub">
-            {scope?.assigneeOnly
-              ? "Chỉ việc được giao cho bạn"
-              : scope?.forcedTeamId
-                ? "Ban của bạn — quản lý & giao việc nội bộ"
-                : "Lọc theo ban · giao sub-task theo thành viên"}
-          </p>
-        </div>
-        {canManage && (
-          <button
-            type="button"
-            className="tm-fab"
-            onClick={() => {
-              resetCreate();
-              setCreateOpen(true);
-            }}
-          >
-            + Tạo task
-          </button>
-        )}
-      </div>
-
-      {deptTabs.length > 0 && (
-        <div className="tm-dept-bar" role="tablist" aria-label="Lọc theo ban">
-          {deptTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={teamFilter === tab.id}
-              className={`tm-dept-chip${teamFilter === tab.id ? " active" : ""}`}
-              onClick={() => setTeamFilter(tab.id)}
-              title={tab.name}
-            >
-              <span aria-hidden>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="chips tm-mode-chips">
-        <button
-          type="button"
-          className={`chip${mode === "board" ? " active" : ""}`}
-          onClick={() => setMode("board")}
-        >
-          Kanban
-        </button>
-        <button
-          type="button"
-          className={`chip${mode === "timeline" ? " active" : ""}`}
-          onClick={() => setMode("timeline")}
-        >
-          Timeline
-        </button>
-      </div>
-
-      {msg && <p className="tm-toast">{msg}</p>}
-
-      {mode === "board" ? (
-        <div className="section kanban-scroll tm-kanban">
-          {COL_ORDER.map((col) => {
-            const items = filteredKanban[col] ?? [];
-            return (
-              <div key={col} className="kanban-col tm-col">
-                <h4>
-                  {COL_LABEL[col]} · {items.length}
-                </h4>
-                {items.map((t) => {
-                  const done = t.checklistDone ?? 0;
-                  const total = t.checklistTotal ?? 0;
-                  const pct =
-                    total > 0
-                      ? Math.round((done / total) * 100)
-                      : (t.progressPct ?? t.progress ?? 0);
-                  const badge = STATUS_PASTEL[t.status] ?? STATUS_PASTEL.todo;
-                  const prio = PRIORITY_UI[t.priority] ?? PRIORITY_UI.medium;
-                  const avatars = t.subAssignees?.length
-                    ? t.subAssignees
-                    : t.assigneeInitials
-                      ? [
-                          {
-                            id: t.assigneeId ?? "a",
-                            name: t.assigneeName ?? "",
-                            initials: t.assigneeInitials,
-                          },
-                        ]
-                      : [];
-                  return (
-                    <button
-                      type="button"
-                      key={t.id}
-                      className="tm-card"
-                      onClick={() => setDetailId(t.id)}
-                    >
-                      <div className="tm-card-top">
-                        <span className={badge.cls}>{badge.label}</span>
-                        <span className={prio.cls}>{prio.label}</span>
-                      </div>
-                      <div className="tm-card-title">{t.title}</div>
-                      {t.teamName && (
-                        <span className="tm-team-pill">
-                          {teamIcon(t.teamName)} {t.teamName}
-                        </span>
-                      )}
-                      {t.activityTitle && (
-                        <span className="tm-act-pill">📅 {t.activityTitle}</span>
-                      )}
-                      <div className="tm-progress">
-                        <div className="tm-progress-meta">
-                          <span>
-                            {done}/{total || "—"} sub-tasks
-                          </span>
-                          <span>{pct}%</span>
-                        </div>
-                        <div className="tm-progress-track">
-                          <div
-                            className="tm-progress-fill"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="tm-card-foot">
-                        <div className="tm-avatars">
-                          {avatars.slice(0, 4).map((a, i) => (
-                            <span
-                              key={a.id}
-                              className="tm-avatar"
-                              style={{ zIndex: 4 - i }}
-                              title={a.name}
-                            >
-                              {a.initials}
-                            </span>
-                          ))}
-                          {!avatars.length && (
-                            <span className="muted" style={{ fontSize: 11 }}>
-                              Chưa gán
-                            </span>
-                          )}
-                        </div>
-                        <span className="tm-due">🗓 {formatDue(t.deadline)}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-                {!items.length && (
-                  <p className="muted" style={{ padding: "4px 6px" }}>
-                    Trống
-                  </p>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <section className="section">
-          {filteredTimeline.map((t) => (
-            <button
-              type="button"
-              key={t.id}
-              className="list-row list-row-btn tm-timeline-row"
-              onClick={() => setDetailId(t.id)}
-            >
-              <div className="avatar">📅</div>
-              <div style={{ flex: 1, textAlign: "left" }}>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{t.title}</div>
-                <div className="muted">
-                  {COL_LABEL[t.status] ?? t.status} · {formatDue(t.deadline)}
-                </div>
-              </div>
-            </button>
-          ))}
-          {!filteredTimeline.length && (
-            <p className="muted">Chưa có task có deadline.</p>
-          )}
-        </section>
-      )}
-
-      {createOpen && (
-        <div
-          className="task-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setCreateOpen(false)}
-        >
-          <form
-            className="task-modal tm-create-modal"
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={(e) => void submitCreate(e)}
-          >
-            <div className="task-modal-header">
-              <h2>Tạo dự án / task chính</h2>
-              <button
-                type="button"
-                className="btn-ghost"
-                onClick={() => setCreateOpen(false)}
-              >
-                Đóng
-              </button>
-            </div>
-
-            <fieldset className="tm-fieldset">
-              <legend>1 · Thông tin chung</legend>
-              <label className="tm-label">
-                Tiêu đề
-                <input
-                  required
-                  value={cTitle}
-                  onChange={(e) => setCTitle(e.target.value)}
-                  placeholder="VD: Workshop CFA Preparation"
-                />
-              </label>
-              <label className="tm-label">
-                Hoạt động liên quan
-                <select
-                  value={cActivityId}
-                  onChange={(e) => setCActivityId(e.target.value)}
-                >
-                  <option value="">— Không gắn —</option>
-                  {activities.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="tm-row2">
-                <label className="tm-label">
-                  Priority
-                  <select
-                    value={cPriority}
-                    onChange={(e) => setCPriority(e.target.value)}
-                  >
-                    <option value="high">🔴 High</option>
-                    <option value="medium">🟡 Medium</option>
-                    <option value="low">🟢 Low</option>
-                  </select>
-                </label>
-                <label className="tm-label">
-                  Deadline
-                  <input
-                    type="datetime-local"
-                    value={cDeadline}
-                    onChange={(e) => setCDeadline(e.target.value)}
-                  />
-                </label>
-              </div>
-            </fieldset>
-
-            <fieldset className="tm-fieldset">
-              <legend>2 · Ban phụ trách</legend>
-              <div className="tm-dept-pick">
-                {teams
-                  .filter(
-                    (t) => !scope?.forcedTeamId || t.id === scope.forcedTeamId,
-                  )
-                  .map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      className={`tm-dept-chip${cTeamId === t.id ? " active" : ""}`}
-                      onClick={() => setCTeamId(t.id)}
-                    >
-                      <span aria-hidden>{teamIcon(t.name)}</span>
-                      <span>{t.name}</span>
-                    </button>
-                  ))}
-              </div>
-              {!cTeamId && (
-                <p className="muted" style={{ fontSize: 12 }}>
-                  Chọn ban để lọc thành viên giao sub-task.
+    <div className="tb-page">
+      {screen === "home" ? (
+        <>
+          <header className="tb-header">
+            <div className="tb-header-left">
+              <Link href="/" aria-label="Trang chủ">
+                <PfcLogo size={32} />
+              </Link>
+              <div>
+                <h1>Công việc</h1>
+                <p>
+                  {openTasks.length} việc đang mở · {doneTasks.length} đã xong ·{" "}
+                  {BRANCHES.length} nhánh
                 </p>
-              )}
-            </fieldset>
-
-            <fieldset className="tm-fieldset">
-              <legend>3 · Sub-tasks & người nhận</legend>
-              {cSubs.map((s, idx) => (
-                <div key={s.key} className="tm-sub-row">
-                  <input
-                    placeholder={`Sub-task #${idx + 1}`}
-                    value={s.title}
-                    onChange={(e) =>
-                      setCSubs((prev) =>
-                        prev.map((x) =>
-                          x.key === s.key ? { ...x, title: e.target.value } : x,
-                        ),
-                      )
-                    }
-                  />
-                  <select
-                    value={s.assigneeId}
-                    onChange={(e) =>
-                      setCSubs((prev) =>
-                        prev.map((x) =>
-                          x.key === s.key
-                            ? { ...x, assigneeId: e.target.value }
-                            : x,
-                        ),
-                      )
-                    }
-                  >
-                    <option value="">Assignee</option>
-                    {membersForTeam.map((m) => (
-                      <option key={m.memberId} value={m.memberId}>
-                        {m.fullName ?? m.email}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="datetime-local"
-                    value={s.deadline}
-                    onChange={(e) =>
-                      setCSubs((prev) =>
-                        prev.map((x) =>
-                          x.key === s.key
-                            ? { ...x, deadline: e.target.value }
-                            : x,
-                        ),
-                      )
-                    }
-                  />
-                  {cSubs.length > 1 && (
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      onClick={() =>
-                        setCSubs((prev) => prev.filter((x) => x.key !== s.key))
-                      }
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
+              </div>
+            </div>
+            {allowAssign ? (
               <button
                 type="button"
-                className="tm-add-sub"
-                onClick={() =>
-                  setCSubs((prev) => [
-                    ...prev,
-                    {
-                      key: `s${Date.now()}`,
-                      title: "",
-                      assigneeId: "",
-                      deadline: "",
-                    },
-                  ])
-                }
+                className="tb-assign-btn"
+                onClick={() => openAssign()}
               >
-                + Add Sub-task
+                + Giao task
               </button>
-            </fieldset>
+            ) : null}
+          </header>
 
+          {nudgeTasks.length > 0 ? (
             <button
-              type="submit"
-              className="btn-primary solid tm-submit"
-              disabled={busy || !cTitle.trim()}
+              type="button"
+              className="tb-alert"
+              onClick={() => setScreen("nudge")}
             >
-              {busy ? "Đang tạo…" : "Tạo dự án"}
+              <span className="tb-alert-ico" aria-hidden>
+                ⚠
+              </span>
+              <span>
+                {nudgeTasks.length} việc cần giục – Quá hạn hoặc còn dưới 48 giờ
+                mà chưa xong
+                {nudgedCount > 0 ? ` · đã giục ${nudgedCount}` : ""}
+              </span>
             </button>
-          </form>
-        </div>
-      )}
+          ) : null}
 
-      {detailId && (
-        <div
-          className="task-modal-backdrop"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setDetailId(null)}
-        >
-          <div
-            className="task-modal tm-detail"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {detailLoading && !detail ? (
-              <p className="muted">Đang tải chi tiết…</p>
-            ) : detail ? (
-              <>
-                <div className="task-modal-header">
-                  <h2>{detail.task.title}</h2>
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    onClick={() => setDetailId(null)}
-                  >
-                    Đóng
-                  </button>
-                </div>
+          {pendingReview.length > 0 ? (
+            <button
+              type="button"
+              className="tb-alert review"
+              onClick={() => setScreen("review_queue")}
+            >
+              <span className="tb-alert-ico" aria-hidden>
+                ✓
+              </span>
+              <span>
+                {pendingReview.length} việc chờ bạn duyệt
+              </span>
+            </button>
+          ) : null}
 
-                <div className="status-rail">
-                  {COL_ORDER.map((s) => {
-                    const from = detail.task.status as TaskStatus;
-                    const legal =
-                      s === from || canTransitionTask(from, s as TaskStatus);
-                    const active = s === from;
-                    return (
-                      <button
-                        key={s}
-                        type="button"
-                        className={`status-chip${active ? " active" : ""}`}
-                        disabled={busy || active || !legal}
-                        onClick={() =>
-                          void run(
-                            {
-                              action: "task_transition",
-                              taskId: detail.task.id,
-                              to: s,
-                              ...(s === "review" && proofLink
-                                ? {
-                                    proofOfWork: proofLink.startsWith("link:")
-                                      ? proofLink
-                                      : `link:${proofLink}`,
-                                  }
-                                : {}),
-                            },
-                            `Đã chuyển → ${COL_LABEL[s]}`,
-                          )
-                        }
-                      >
-                        {STATUS_PASTEL[s]?.label ?? COL_LABEL[s]}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="card task-meta-grid">
-                  <div>
-                    <div className="muted">Ban</div>
-                    <strong>{detail.task.teamName ?? "—"}</strong>
-                  </div>
-                  <div>
-                    <div className="muted">Hoạt động</div>
-                    <strong>{detail.task.activityTitle ?? "—"}</strong>
-                  </div>
-                  <div>
-                    <div className="muted">Hạn chót</div>
-                    <strong>{formatDue(detail.task.deadline)}</strong>
-                  </div>
-                  <div>
-                    <div className="muted">Ưu tiên</div>
-                    <span
-                      className={
-                        (PRIORITY_UI[detail.task.priority] ?? PRIORITY_UI.medium)
-                          .cls
-                      }
-                    >
-                      {
-                        (PRIORITY_UI[detail.task.priority] ?? PRIORITY_UI.medium)
-                          .label
-                      }
-                    </span>
-                  </div>
-                </div>
-
-                <div className="card">
-                  <h3>
-                    Sub-tasks ({detail.checklist.filter((c) => c.done).length}/
-                    {detail.checklist.length})
-                  </h3>
-                  {detail.checklist.map((c) => (
-                    <label key={c.id} className="check-row tm-check">
-                      <input
-                        type="checkbox"
-                        checked={c.done}
-                        disabled={busy}
-                        onChange={() =>
-                          void run({
-                            action: "toggle_checklist",
-                            itemId: c.id,
-                            done: !c.done,
-                          })
-                        }
-                      />
-                      <span
-                        style={{
-                          textDecoration: c.done ? "line-through" : "none",
-                          flex: 1,
-                        }}
-                      >
-                        {c.title}
-                      </span>
-                      {c.assigneeInitials && (
-                        <span
-                          className="tm-avatar sm"
-                          title={c.assigneeName ?? ""}
-                        >
-                          {c.assigneeInitials}
-                        </span>
-                      )}
-                      {c.deadline && (
-                        <span className="muted" style={{ fontSize: 11 }}>
-                          {formatDue(c.deadline)}
-                        </span>
-                      )}
-                    </label>
-                  ))}
-                  {canManage && (
-                    <div className="tm-sub-add">
-                      <input
-                        value={checkTitle}
-                        onChange={(e) => setCheckTitle(e.target.value)}
-                        placeholder="Thêm sub-task…"
-                      />
-                      <select
-                        value={checkAssignee}
-                        onChange={(e) => setCheckAssignee(e.target.value)}
-                      >
-                        <option value="">Assignee</option>
-                        {members
-                          .filter(
-                            (m) =>
-                              !detail.task.teamId ||
-                              m.teamId === detail.task.teamId,
-                          )
-                          .map((m) => (
-                            <option key={m.memberId} value={m.memberId}>
-                              {m.fullName ?? m.email}
-                            </option>
-                          ))}
-                      </select>
-                      <input
-                        type="datetime-local"
-                        value={checkDeadline}
-                        onChange={(e) => setCheckDeadline(e.target.value)}
-                      />
-                      <button
-                        type="button"
-                        className="btn-ghost"
-                        disabled={busy || !checkTitle.trim()}
-                        onClick={() => {
-                          void run({
-                            action: "add_checklist",
-                            taskId: detail.task.id,
-                            title: checkTitle.trim(),
-                            assigneeId: checkAssignee || null,
-                            deadline: checkDeadline || null,
-                          }).then(() => {
-                            setCheckTitle("");
-                            setCheckAssignee("");
-                            setCheckDeadline("");
-                          });
-                        }}
-                      >
-                        Thêm
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="card">
-                  <h3>Cập nhật tiến độ</h3>
-                  <div className="progress-meta">
-                    <strong>{progressDraft}%</strong>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={progressDraft}
-                    onChange={(e) => setProgressDraft(Number(e.target.value))}
-                    style={{ width: "100%" }}
-                  />
-                  <button
-                    type="button"
-                    className="btn-primary solid"
-                    disabled={busy}
-                    style={{ marginTop: 8 }}
-                    onClick={() =>
-                      void run(
-                        {
-                          action: "set_task_progress",
-                          taskId: detail.task.id,
-                          progress: progressDraft,
-                        },
-                        `Đã lưu tiến độ ${progressDraft}%`,
-                      )
-                    }
-                  >
-                    Lưu tiến độ
-                  </button>
-                </div>
-
-                <div className="card">
-                  <h3>Bằng chứng / Proof</h3>
-                  <input
-                    value={proofLink}
-                    onChange={(e) => setProofLink(e.target.value)}
-                    placeholder="https://…"
+          <div className="tb-grid">
+            {branchStats.map((s) => (
+              <button
+                key={s.branch.id}
+                type="button"
+                className="tb-branch-card"
+                onClick={() => openBranch(s.branch.id)}
+              >
+                {s.overdue > 0 ? (
+                  <span className="tb-badge danger">{s.overdue} quá hạn</span>
+                ) : s.soon > 0 ? (
+                  <span className="tb-badge warn">{s.soon} sắp hạn</span>
+                ) : s.waiting > 0 ? (
+                  <span className="tb-badge review">
+                    {s.waiting} chờ duyệt
+                  </span>
+                ) : null}
+                <span
+                  className="tb-branch-ico"
+                  style={{ background: s.branch.soft, color: s.branch.color }}
+                >
+                  {s.branch.icon}
+                </span>
+                <strong>{s.branch.name}</strong>
+                <span className="tb-branch-meta">
+                  {s.open} đang mở · {s.done}/{s.total || 0} xong
+                </span>
+                <span className="tb-branch-bar">
+                  <i
                     style={{
-                      width: "100%",
-                      padding: 8,
-                      borderRadius: 10,
-                      border: "1px solid var(--pfc-border)",
-                      font: "inherit",
+                      width: `${s.pct}%`,
+                      background: s.branch.color,
                     }}
                   />
-                  <button
-                    type="button"
-                    className="btn-ghost"
-                    disabled={busy || !proofLink.trim()}
-                    style={{ marginTop: 8 }}
-                    onClick={() =>
-                      void run(
-                        {
-                          action: "attach_proof",
-                          taskId: detail.task.id,
-                          proofOfWork: proofLink.startsWith("link:")
-                            ? proofLink
-                            : `link:${proofLink}`,
-                        },
-                        "Đã gắn proof",
-                      )
-                    }
-                  >
-                    Lưu proof
-                  </button>
-                </div>
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
-                <div className="card">
-                  <h3>Ghi chú</h3>
-                  {detail.comments.map((c) => (
-                    <div key={c.id} className="tm-comment">
-                      <strong>{c.authorName ?? "—"}</strong>
-                      <p>{c.body}</p>
-                    </div>
-                  ))}
-                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                    <input
-                      value={commentBody}
-                      onChange={(e) => setCommentBody(e.target.value)}
-                      placeholder="Thêm ghi chú…"
-                      style={{
-                        flex: 1,
-                        padding: 8,
-                        borderRadius: 10,
-                        border: "1px solid var(--pfc-border)",
-                        font: "inherit",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="btn-ghost"
-                      disabled={busy || !commentBody.trim()}
-                      onClick={() => {
-                        void run({
-                          action: "add_task_comment",
-                          taskId: detail.task.id,
-                          body: commentBody.trim(),
-                        }).then(() => setCommentBody(""));
-                      }}
-                    >
-                      Gửi
-                    </button>
-                  </div>
-                </div>
+      {screen === "branch" && activeBranch ? (
+        <>
+          <header className="tb-subhead">
+            <button
+              type="button"
+              className="tb-back"
+              onClick={() => setScreen("home")}
+              aria-label="Quay lại"
+            >
+              ←
+            </button>
+            <span
+              className="tb-branch-ico sm"
+              style={{
+                background: activeBranch.soft,
+                color: activeBranch.color,
+              }}
+            >
+              {activeBranch.icon}
+            </span>
+            <div className="tb-subhead-text">
+              <h1>{activeBranch.name}</h1>
+              <p>
+                {branchLists.open.length} đang mở · {branchAssignees} người thực
+                hiện
+              </p>
+            </div>
+            {allowAssign ? (
+              <button
+                type="button"
+                className="tb-plus"
+                onClick={() => openAssign(activeBranch.id)}
+                aria-label="Giao task"
+              >
+                +
+              </button>
+            ) : null}
+          </header>
 
-                {can("review_tasks") && detail.task.status === "review" && (
-                  <div className="card">
-                    <h3>Duyệt hoàn thành</h3>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        className="btn-primary solid"
-                        disabled={busy}
-                        onClick={() =>
-                          void run(
-                            {
-                              action: "review_task",
-                              taskId: detail.task.id,
-                              decision: "approve",
-                            },
-                            "Đã duyệt ✅",
-                          )
-                        }
-                      >
-                        Approve
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-ghost"
-                        disabled={busy}
-                        onClick={() =>
-                          void run({
-                            action: "review_task",
-                            taskId: detail.task.id,
-                            decision: "request_changes",
-                            reason: "Cần chỉnh sửa",
-                          })
-                        }
-                      >
-                        Request changes
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
+          <div className="tb-tabs four" role="tablist">
+            {(
+              [
+                ["open", "Đang mở", branchLists.open.length],
+                ["submitted", "Chờ duyệt", branchLists.submitted.length],
+                ["nudge", "Cần giục", branchLists.nudge.length],
+                ["done", "Đã xong", branchLists.done.length],
+              ] as const
+            ).map(([id, label, count]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                className={branchTab === id ? "on" : ""}
+                onClick={() => setBranchTab(id)}
+              >
+                {label} <em>{count}</em>
+              </button>
+            ))}
+          </div>
+
+          <TaskList
+            tasks={listForBranchTab}
+            now={now}
+            showBranch={false}
+            onRemind={remind}
+            onRemindReview={remindReview}
+            onSubmit={openSubmit}
+            onReview={openReview}
+            onOpenDetail={(t) => {
+              setDetailTaskId(t.id);
+              setHistoryOpen(true);
+            }}
+          />
+        </>
+      ) : null}
+
+      {screen === "nudge" ? (
+        <>
+          <header className="tb-subhead">
+            <button
+              type="button"
+              className="tb-back"
+              onClick={() => setScreen("home")}
+              aria-label="Quay lại"
+            >
+              ←
+            </button>
+            <div className="tb-subhead-text">
+              <h1>Cần giục deadline</h1>
+              <p>{nudgeTasks.length} việc trên 6 nhánh</p>
+            </div>
+          </header>
+
+          {nudgePending.length > 0 ? (
+            <button
+              type="button"
+              className="tb-remind-all"
+              onClick={() => void remindAll()}
+            >
+              Giục tất cả ({nudgePending.length} việc)
+            </button>
+          ) : null}
+
+          <TaskList
+            tasks={nudgeTasks}
+            now={now}
+            showBranch
+            onRemind={remind}
+            onRemindReview={remindReview}
+            onSubmit={openSubmit}
+            onReview={openReview}
+            onOpenDetail={(t) => {
+              setDetailTaskId(t.id);
+              setHistoryOpen(true);
+            }}
+          />
+        </>
+      ) : null}
+
+      {screen === "review_queue" ? (
+        <>
+          <header className="tb-subhead">
+            <button
+              type="button"
+              className="tb-back"
+              onClick={() => setScreen("home")}
+              aria-label="Quay lại"
+            >
+              ←
+            </button>
+            <div className="tb-subhead-text">
+              <h1>Chờ bạn duyệt</h1>
+              <p>{pendingReview.length} việc từ mọi nhánh</p>
+            </div>
+          </header>
+
+          <TaskList
+            tasks={pendingReview}
+            now={now}
+            showBranch
+            onRemind={remind}
+            onRemindReview={remindReview}
+            onSubmit={openSubmit}
+            onReview={openReview}
+            onOpenDetail={(t) => {
+              setDetailTaskId(t.id);
+              setHistoryOpen(true);
+            }}
+          />
+        </>
+      ) : null}
+
+      {portalTarget && toast
+        ? createPortal(<div className="tb-toast">{toast}</div>, portalTarget)
+        : null}
+
+      {portalTarget && showAssign
+        ? createPortal(
+            <AssignSheet
+              form={assignForm}
+              errors={assignErrors}
+              onClose={() => setShowAssign(false)}
+              onChange={(patch) => {
+                setAssignForm((f) => {
+                  const next = { ...f, ...patch };
+                  if (patch.assigneeId !== undefined) {
+                    next.supervisorId =
+                      defaultSupervisorForAssignee(patch.assigneeId) ?? "";
+                    setAssignErrors((e) => {
+                      const n = { ...e };
+                      delete n.assigneeId;
+                      return n;
+                    });
+                  }
+                  if (patch.title !== undefined) {
+                    setAssignErrors((e) => {
+                      const n = { ...e };
+                      delete n.title;
+                      return n;
+                    });
+                  }
+                  if (patch.date !== undefined || patch.time !== undefined) {
+                    setAssignErrors((e) => {
+                      const n = { ...e };
+                      delete n.deadline;
+                      return n;
+                    });
+                  }
+                  return next;
+                });
+              }}
+              onSubmit={() => void submitAssign()}
+            />,
+            portalTarget,
+          )
+        : null}
+
+      {portalTarget && submitTarget
+        ? createPortal(
+            <SubmitSheet
+              task={submitTarget}
+              form={submitForm}
+              errors={submitErrors}
+              onClose={() => setSubmitTaskId(null)}
+              onChange={setSubmitForm}
+              onPickFiles={onPickFiles}
+              onClearError={(key) =>
+                setSubmitErrors((e) => {
+                  const n = { ...e };
+                  delete n[key];
+                  return n;
+                })
+              }
+              onSubmit={() => void confirmSubmit()}
+            />,
+            portalTarget,
+          )
+        : null}
+
+      {portalTarget && reviewTarget
+        ? createPortal(
+            <ReviewSheet
+              task={reviewTarget}
+              form={reviewForm}
+              errors={reviewErrors}
+              onClose={() => setReviewTaskId(null)}
+              onChange={(patch) => {
+                setReviewForm((f) => ({ ...f, ...patch }));
+                setReviewErrors((e) => {
+                  const n = { ...e };
+                  if (patch.result !== undefined) delete n.result;
+                  if (patch.comment !== undefined) delete n.comment;
+                  if (patch.date !== undefined || patch.time !== undefined) {
+                    delete n.deadline;
+                  }
+                  return n;
+                });
+              }}
+              onSubmit={() => void confirmReview()}
+            />,
+            portalTarget,
+          )
+        : null}
+
+      {portalTarget && detailTarget
+        ? createPortal(
+            <DetailSheet
+              task={detailTarget}
+              historyOpen={historyOpen}
+              onToggleHistory={() => setHistoryOpen((v) => !v)}
+              onClose={() => setDetailTaskId(null)}
+            />,
+            portalTarget,
+          )
+        : null}
+    </div>
+  );
+}
+
+function TaskList({
+  tasks,
+  now,
+  showBranch,
+  onRemind,
+  onRemindReview,
+  onSubmit,
+  onReview,
+  onOpenDetail,
+}: {
+  tasks: Task[];
+  now: Date;
+  showBranch: boolean;
+  onRemind: (t: Task) => void;
+  onRemindReview: (t: Task) => void;
+  onSubmit: (t: Task) => void;
+  onReview: (t: Task) => void;
+  onOpenDetail: (t: Task) => void;
+}) {
+  if (tasks.length === 0) {
+    return <p className="tb-empty">Không có việc nào ở mục này.</p>;
+  }
+  return (
+    <ul className="tb-task-list">
+      {tasks.map((task) => (
+        <TaskCard
+          key={task.id}
+          task={task}
+          now={now}
+          showBranch={showBranch}
+          onRemind={() => onRemind(task)}
+          onRemindReview={() => onRemindReview(task)}
+          onSubmit={() => onSubmit(task)}
+          onReview={() => onReview(task)}
+          onOpenDetail={() => onOpenDetail(task)}
+        />
+      ))}
+    </ul>
+  );
+}
+
+function StatusChip({ task }: { task: Task }) {
+  if (
+    task.status !== "submitted" &&
+    task.status !== "revision" &&
+    task.status !== "redo"
+  ) {
+    return null;
+  }
+  const comment = latestReviewComment(task);
+  return (
+    <div className={`tb-status-chip ${task.status}`}>
+      <span className="tb-status-label">{statusLabel(task.status)}</span>
+      {(task.status === "revision" || task.status === "redo") && comment ? (
+        <span className="tb-status-note">“{comment}”</span>
+      ) : null}
+    </div>
+  );
+}
+
+function TaskCard({
+  task,
+  now,
+  showBranch,
+  onRemind,
+  onRemindReview,
+  onSubmit,
+  onReview,
+  onOpenDetail,
+}: {
+  task: Task;
+  now: Date;
+  showBranch: boolean;
+  onRemind: () => void;
+  onRemindReview: () => void;
+  onSubmit: () => void;
+  onReview: () => void;
+  onOpenDetail: () => void;
+}) {
+  const assignee = memberById(task.assigneeId);
+  const supervisor = memberById(task.supervisorId);
+  const dept = assignee ? departmentById(assignee.departmentId) : null;
+  const branch = branchById(task.branchId);
+  const relative = formatDeadlineRelative(task, now);
+  const nudge = needsReminder(task, now);
+  const overdue = isOverdue(task, now);
+  const done = task.status === "done";
+  const reminded = !!task.lastRemindedAt;
+  const showSubmit = canSubmit(task, CURRENT_USER);
+  const showReview = canReview(task, CURRENT_USER);
+  const showReviewNudge = canRemindReview(task, CURRENT_USER);
+  const reviewNudged = !!task.lastReviewRemindedAt;
+
+  return (
+    <li className={`tb-task${done ? " done" : ""}`}>
+      <div className="tb-task-top">
+        <div className="tb-task-title-wrap">
+          {showBranch ? (
+            <span
+              className="tb-branch-tag"
+              style={{ color: branch.color, background: branch.soft }}
+            >
+              {branch.short}
+            </span>
+          ) : null}
+          <button
+            type="button"
+            className={`tb-task-title-btn${done ? " strike" : ""}`}
+            onClick={onOpenDetail}
+          >
+            {task.title}
+          </button>
+        </div>
+        <div className="tb-task-actions">
+          {showSubmit ? (
+            <button type="button" className="tb-action-btn submit" onClick={onSubmit}>
+              Nộp kết quả
+            </button>
+          ) : null}
+          {showReview ? (
+            <button type="button" className="tb-action-btn review" onClick={onReview}>
+              Duyệt
+            </button>
+          ) : null}
+          {showReviewNudge ? (
+            reviewNudged ? (
+              <span className="tb-reminded">✓ Đã nhắc duyệt</span>
             ) : (
-              <p className="muted">{msg ?? "Không tải được"}</p>
+              <button
+                type="button"
+                className="tb-remind-btn review"
+                onClick={onRemindReview}
+              >
+                🔔 Nhắc duyệt
+              </button>
+            )
+          ) : null}
+          {nudge && !done ? (
+            reminded ? (
+              <span className="tb-reminded">✓ Đã giục</span>
+            ) : (
+              <button
+                type="button"
+                className={`tb-remind-btn${overdue ? " danger" : " warn"}`}
+                onClick={onRemind}
+              >
+                🔔 Giục DL
+              </button>
+            )
+          ) : null}
+        </div>
+      </div>
+
+      <StatusChip task={task} />
+
+      <div className="tb-task-people">
+        <span
+          className="tb-avatar"
+          style={{
+            background: dept?.soft ?? "#f5f3ff",
+            color: dept?.color ?? "#7c3aed",
+          }}
+        >
+          {assignee?.initials ?? "?"}
+        </span>
+        <span className="tb-name">{firstName(assignee?.name ?? "—")}</span>
+        {dept ? (
+          <span
+            className="tb-dept-tag"
+            style={{ color: dept.color, background: dept.soft }}
+          >
+            {dept.name}
+          </span>
+        ) : null}
+      </div>
+
+      <p className="tb-care">
+        <span aria-hidden>🛡</span> Take care: {supervisor?.name ?? "—"} ·{" "}
+        {supervisor?.role ?? ""}
+      </p>
+
+      <div className="tb-task-foot">
+        <span>
+          <span aria-hidden>📅</span> {formatDeadlineFull(task.dueDate)}
+        </span>
+        <em className={`tone-${relative.tone}`}>{relative.text}</em>
+      </div>
+    </li>
+  );
+}
+
+function AssignSheet({
+  form,
+  errors,
+  onClose,
+  onChange,
+  onSubmit,
+}: {
+  form: AssignForm;
+  errors: AssignErrors;
+  onClose: () => void;
+  onChange: (patch: Partial<AssignForm>) => void;
+  onSubmit: () => void;
+}) {
+  const preview =
+    form.date && form.time
+      ? formatDeadlineFull(`${form.date}T${form.time}:00`)
+      : null;
+  const lockedCare = !form.assigneeId;
+
+  return (
+    <div className="tb-sheet-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="tb-sheet"
+        role="dialog"
+        aria-label="Giao task mới"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header>
+          <h2>Giao task mới</h2>
+          <button type="button" onClick={onClose} aria-label="Đóng">
+            ✕
+          </button>
+        </header>
+
+        <label className="tb-field">
+          Tên task
+          <input
+            value={form.title}
+            onChange={(e) => onChange({ title: e.target.value })}
+            placeholder="Thiết kế poster Career Talk"
+          />
+          {errors.title ? <span className="tb-err">{errors.title}</span> : null}
+        </label>
+
+        <label className="tb-field">
+          Nhánh
+          <select
+            value={form.branchId}
+            onChange={(e) =>
+              onChange({ branchId: e.target.value as BranchId })
+            }
+          >
+            {BRANCHES.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="tb-field">
+          Người thực hiện
+          <select
+            value={form.assigneeId}
+            onChange={(e) => onChange({ assigneeId: e.target.value })}
+          >
+            <option value="">Chọn người thực hiện</option>
+            {DEPARTMENTS.map((d) => (
+              <optgroup key={d.id} label={d.name}>
+                {MEMBERS.filter((m) => m.departmentId === d.id).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} · {m.role}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {errors.assigneeId ? (
+            <span className="tb-err">{errors.assigneeId}</span>
+          ) : null}
+        </label>
+
+        <label className="tb-field">
+          Take care
+          <select
+            value={form.supervisorId}
+            disabled={lockedCare}
+            onChange={(e) => onChange({ supervisorId: e.target.value })}
+          >
+            {lockedCare ? (
+              <option value="">Chọn người thực hiện trước</option>
+            ) : (
+              supervisors().map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} · {m.role} ({departmentById(m.departmentId)?.name})
+                </option>
+              ))
             )}
+          </select>
+        </label>
+
+        <div className="tb-row2">
+          <label className="tb-field">
+            Ngày deadline
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => onChange({ date: e.target.value })}
+            />
+          </label>
+          <label className="tb-field">
+            Giờ
+            <input
+              type="time"
+              value={form.time}
+              onChange={(e) => onChange({ time: e.target.value })}
+            />
+          </label>
+        </div>
+        {errors.deadline ? (
+          <span className="tb-err block">{errors.deadline}</span>
+        ) : null}
+        {preview && !errors.deadline ? (
+          <p className="tb-preview">{preview}</p>
+        ) : null}
+
+        <div className="tb-field">
+          <span>Mức ưu tiên</span>
+          <div className="tb-prio">
+            {(
+              [
+                ["low", "Thấp"],
+                ["medium", "Trung bình"],
+                ["high", "Cao"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                className={form.priority === id ? "on" : ""}
+                onClick={() => onChange({ priority: id })}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
-      )}
-    </>
+
+        <label className="tb-field">
+          Ghi chú
+          <textarea
+            rows={3}
+            value={form.note}
+            onChange={(e) => onChange({ note: e.target.value })}
+            placeholder="Link tài liệu, yêu cầu cụ thể"
+          />
+        </label>
+
+        <div className="tb-sheet-actions">
+          <button type="button" className="tb-btn ghost" onClick={onClose}>
+            Huỷ
+          </button>
+          <button type="button" className="tb-btn primary" onClick={onSubmit}>
+            ↗ Giao task
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubmitSheet({
+  task,
+  form,
+  errors,
+  onClose,
+  onChange,
+  onPickFiles,
+  onClearError,
+  onSubmit,
+}: {
+  task: Task;
+  form: SubmitForm;
+  errors: SubmitErrors;
+  onClose: () => void;
+  onChange: (next: SubmitForm) => void;
+  onPickFiles: (files: FileList | null) => void;
+  onClearError: (key: keyof SubmitErrors) => void;
+  onSubmit: () => void;
+}) {
+  const prev = latestReviewComment(task);
+  const showPrev = task.status === "revision" || task.status === "redo";
+
+  return (
+    <div className="tb-sheet-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="tb-sheet tall"
+        role="dialog"
+        aria-label="Nộp kết quả"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header>
+          <h2>Nộp kết quả</h2>
+          <button type="button" onClick={onClose} aria-label="Đóng">
+            ✕
+          </button>
+        </header>
+
+        <div className="tb-sheet-meta">
+          <strong>{task.title}</strong>
+          <span>Deadline: {formatDeadlineFull(task.dueDate)}</span>
+        </div>
+
+        {showPrev && prev ? (
+          <div className={`tb-prev-review ${task.status}`}>
+            <strong>
+              {task.status === "revision"
+                ? "Nhận xét lần duyệt trước"
+                : "Lý do làm lại"}
+            </strong>
+            <p>{prev}</p>
+          </div>
+        ) : null}
+
+        <div className="tb-field">
+          <span>Link minh chứng</span>
+          {form.links.map((link, i) => (
+            <div key={i} className="tb-link-row">
+              <input
+                value={link}
+                placeholder="https://..."
+                onChange={(e) => {
+                  const links = [...form.links];
+                  links[i] = e.target.value;
+                  onChange({ ...form, links });
+                  onClearError(`link_${i}`);
+                  onClearError("evidence");
+                }}
+              />
+              {form.links.length > 1 ? (
+                <button
+                  type="button"
+                  className="tb-x"
+                  aria-label="Xoá link"
+                  onClick={() => {
+                    const links = form.links.filter((_, j) => j !== i);
+                    onChange({ ...form, links: links.length ? links : [""] });
+                  }}
+                >
+                  ✕
+                </button>
+              ) : null}
+              {errors[`link_${i}`] ? (
+                <span className="tb-err">{errors[`link_${i}`]}</span>
+              ) : null}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="tb-add-link"
+            onClick={() => onChange({ ...form, links: [...form.links, ""] })}
+          >
+            + Thêm link
+          </button>
+        </div>
+
+        <div className="tb-field">
+          <span>Tệp / ảnh minh chứng</span>
+          <label className="tb-upload">
+            <input
+              type="file"
+              multiple
+              accept="image/*,.pdf,.doc,.docx,.ppt,.pptx,.zip"
+              onChange={(e) => {
+                onPickFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+            Tải lên ảnh hoặc file
+          </label>
+          {form.files.length > 0 ? (
+            <ul className="tb-file-list">
+              {form.files.map((f) => (
+                <li key={f.id}>
+                  {f.type === "image" ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={f.url} alt="" className="tb-thumb" />
+                  ) : (
+                    <span className="tb-file-ico">📄</span>
+                  )}
+                  <span className="tb-file-name">{f.name}</span>
+                  <button
+                    type="button"
+                    className="tb-x"
+                    aria-label="Xoá tệp"
+                    onClick={() =>
+                      onChange({
+                        ...form,
+                        files: form.files.filter((x) => x.id !== f.id),
+                      })
+                    }
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        {errors.evidence ? (
+          <span className="tb-err block">{errors.evidence}</span>
+        ) : null}
+
+        <label className="tb-field">
+          Ghi chú cho người duyệt
+          <textarea
+            rows={3}
+            value={form.note}
+            onChange={(e) => onChange({ ...form, note: e.target.value })}
+            placeholder="Mô tả ngắn những gì đã làm"
+          />
+        </label>
+
+        <div className="tb-sheet-actions">
+          <button type="button" className="tb-btn ghost" onClick={onClose}>
+            Huỷ
+          </button>
+          <button type="button" className="tb-btn primary" onClick={onSubmit}>
+            Nộp để duyệt
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReviewSheet({
+  task,
+  form,
+  errors,
+  onClose,
+  onChange,
+  onSubmit,
+}: {
+  task: Task;
+  form: ReviewForm;
+  errors: ReviewErrors;
+  onClose: () => void;
+  onChange: (patch: Partial<ReviewForm>) => void;
+  onSubmit: () => void;
+}) {
+  const assignee = memberById(task.assigneeId);
+  const dept = assignee ? departmentById(assignee.departmentId) : null;
+  const last = task.submissions[task.submissions.length - 1];
+  const older = task.submissions.slice(0, -1).reverse();
+  const [showOlder, setShowOlder] = useState(false);
+
+  const lateOk = last
+    ? new Date(last.submittedAt).getTime() <= new Date(task.dueDate).getTime()
+    : true;
+  const lateText =
+    last && !lateOk
+      ? last.lateLabel ||
+        formatLateDuration(task.dueDate, last.submittedAt)
+      : null;
+
+  const needDeadline =
+    form.result === "revision" || form.result === "redo";
+
+  return (
+    <div className="tb-sheet-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="tb-sheet tall"
+        role="dialog"
+        aria-label="Duyệt kết quả"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header>
+          <h2>Duyệt kết quả</h2>
+          <button type="button" onClick={onClose} aria-label="Đóng">
+            ✕
+          </button>
+        </header>
+
+        <div className="tb-sheet-meta">
+          <strong>{task.title}</strong>
+          <span>
+            {assignee?.name ?? "—"}
+            {dept ? ` · ${dept.name}` : ""}
+          </span>
+          <span>Deadline: {formatDeadlineFull(task.dueDate)}</span>
+          {last ? (
+            <span>
+              Nộp lúc: {formatDeadlineFull(last.submittedAt)}{" "}
+              {lateOk ? (
+                <em className="tb-late-tag ok">Đúng hạn</em>
+              ) : (
+                <em className="tb-late-tag late">{lateText}</em>
+              )}
+            </span>
+          ) : null}
+        </div>
+
+        {last ? <SubmissionBlock sub={last} /> : null}
+
+        {older.length > 0 ? (
+          <div className="tb-older">
+            <button
+              type="button"
+              className="tb-older-toggle"
+              onClick={() => setShowOlder((v) => !v)}
+            >
+              {showOlder ? "▾" : "▸"} Lịch sử các lần nộp trước ({older.length})
+            </button>
+            {showOlder
+              ? older.map((s) => <SubmissionBlock key={s.id} sub={s} compact />)
+              : null}
+          </div>
+        ) : null}
+
+        <div className="tb-field">
+          <span>Kết quả duyệt</span>
+          <div className="tb-review-choices">
+            {(
+              [
+                ["approved", "Đạt – Hoàn thành", "ok"],
+                ["revision", "Cần chỉnh sửa", "rev"],
+                ["redo", "Làm lại", "redo"],
+              ] as const
+            ).map(([id, label, cls]) => (
+              <button
+                key={id}
+                type="button"
+                className={`tb-review-choice ${cls}${form.result === id ? " on" : ""}`}
+                onClick={() => {
+                  if (id === "revision") {
+                    onChange({ result: id, date: "", time: "" });
+                  } else if (id === "redo") {
+                    const d = new Date();
+                    d.setMinutes(0, 0, 0);
+                    d.setHours(d.getHours() + 48);
+                    onChange({
+                      result: id,
+                      date: d.toISOString().slice(0, 10),
+                      time: d.toTimeString().slice(0, 5),
+                    });
+                  } else {
+                    onChange({ result: id });
+                  }
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {errors.result ? (
+            <span className="tb-err">{errors.result}</span>
+          ) : null}
+        </div>
+
+        <label className="tb-field">
+          Nhận xét
+          <textarea
+            rows={3}
+            value={form.comment}
+            onChange={(e) => onChange({ comment: e.target.value })}
+            placeholder={
+              form.result === "redo"
+                ? "Lý do chưa đạt và yêu cầu làm lại"
+                : form.result === "revision"
+                  ? "Cần hoàn thiện phần nào?"
+                  : "Không bắt buộc với Đạt"
+            }
+          />
+          {errors.comment ? (
+            <span className="tb-err">{errors.comment}</span>
+          ) : null}
+        </label>
+
+        {needDeadline ? (
+          <>
+            <div className="tb-row2">
+              <label className="tb-field">
+                Deadline mới
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => onChange({ date: e.target.value })}
+                />
+              </label>
+              <label className="tb-field">
+                Giờ
+                <input
+                  type="time"
+                  value={form.time}
+                  onChange={(e) => onChange({ time: e.target.value })}
+                />
+              </label>
+            </div>
+            {form.result === "revision" ? (
+              <p className="tb-hint">Để trống thì giữ deadline cũ</p>
+            ) : null}
+            {errors.deadline ? (
+              <span className="tb-err block">{errors.deadline}</span>
+            ) : null}
+          </>
+        ) : null}
+
+        <div className="tb-sheet-actions">
+          <button type="button" className="tb-btn ghost" onClick={onClose}>
+            Huỷ
+          </button>
+          <button type="button" className="tb-btn primary" onClick={onSubmit}>
+            Xác nhận
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubmissionBlock({
+  sub,
+  compact,
+}: {
+  sub: Submission;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`tb-sub-block${compact ? " compact" : ""}`}>
+      {compact ? (
+        <p className="tb-sub-when">{formatDeadlineFull(sub.submittedAt)}</p>
+      ) : null}
+      {sub.links.length > 0 ? (
+        <ul className="tb-link-list">
+          {sub.links.map((l) => (
+            <li key={l}>
+              <a href={l} target="_blank" rel="noreferrer">
+                {l}
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {sub.files.length > 0 ? (
+        <ul className="tb-file-list view">
+          {sub.files.map((f) => (
+            <li key={f.id}>
+              {f.type === "image" ? (
+                <a href={f.url} target="_blank" rel="noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={f.url} alt={f.name} className="tb-thumb lg" />
+                </a>
+              ) : (
+                <a href={f.url} target="_blank" rel="noreferrer">
+                  📄 {f.name}
+                </a>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {sub.note ? <p className="tb-sub-note">{sub.note}</p> : null}
+      {sub.review ? (
+        <p className="tb-sub-review">
+          Đã duyệt: {statusLabel(
+            sub.review.result === "approved" ? "done" : sub.review.result,
+          )}
+          {sub.review.comment ? ` — ${sub.review.comment}` : ""}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function DetailSheet({
+  task,
+  historyOpen,
+  onToggleHistory,
+  onClose,
+}: {
+  task: Task;
+  historyOpen: boolean;
+  onToggleHistory: () => void;
+  onClose: () => void;
+}) {
+  const assignee = memberById(task.assigneeId);
+  const supervisor = memberById(task.supervisorId);
+  const events = [...task.history].sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
+  );
+
+  return (
+    <div className="tb-sheet-backdrop" role="presentation" onClick={onClose}>
+      <div
+        className="tb-sheet tall"
+        role="dialog"
+        aria-label="Chi tiết task"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header>
+          <h2>Chi tiết task</h2>
+          <button type="button" onClick={onClose} aria-label="Đóng">
+            ✕
+          </button>
+        </header>
+
+        <div className="tb-sheet-meta">
+          <strong>{task.title}</strong>
+          <StatusChip task={task} />
+          <span>
+            Thực hiện: {assignee?.name ?? "—"} · Take care:{" "}
+            {supervisor?.name ?? "—"}
+          </span>
+          <span>Deadline: {formatDeadlineFull(task.dueDate)}</span>
+          {task.note ? <span>Ghi chú: {task.note}</span> : null}
+        </div>
+
+        <div className="tb-history">
+          <button
+            type="button"
+            className="tb-older-toggle"
+            onClick={onToggleHistory}
+          >
+            {historyOpen ? "▾" : "▸"} Lịch sử
+          </button>
+          {historyOpen ? (
+            <ol className="tb-timeline">
+              {events.map((ev) => {
+                const actor = memberById(ev.actorId);
+                const style = historyIcon(ev.type);
+                return (
+                  <li key={ev.id}>
+                    <span
+                      className="tb-tl-dot"
+                      style={{ background: style.color }}
+                      aria-hidden
+                    >
+                      {style.icon}
+                    </span>
+                    <div>
+                      <strong>{ev.message.split(" — ")[0]}</strong>
+                      <span>
+                        {actor?.name ?? "—"}
+                        {ev.message.includes(" — ")
+                          ? ` — “${ev.message.split(" — ").slice(1).join(" — ")}”`
+                          : ""}
+                      </span>
+                      <em>{formatDeadlineFull(ev.at)}</em>
+                    </div>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : null}
+        </div>
+      </div>
+    </div>
   );
 }
