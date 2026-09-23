@@ -1,0 +1,8 @@
+stamp=2026-09-21T07-59-43
+db=E:\PFC\PFC-Management\apps\club\.data\club.sqlite
+backup=E:\PFC\PFC-Management\apps\club\.data\backups\club-g7-2026-09-21T07-59-43.sqlite
+backup_bytes=376832
+versions_before=0001_init_club,0002_secondary_indexes,0003_audit_sensitive,0004_membership_p4b,0005_g6_cross_cutting
+rolled_back=0005_g6_cross_cutting
+versions_after_down=0001_init_club,0002_secondary_indexes,0003_audit_sensitive,0004_membership_p4b
+versions_after_up=0001_init_club,0002_secondary_indexes,0003_audit_sensitive,0004_membership_p4b,0005_g6_cross_cutting

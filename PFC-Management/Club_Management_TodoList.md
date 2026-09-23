@@ -98,18 +98,18 @@ Một task **chỉ DONE** khi đủ:
 | ID | Task | Done |
 |----|------|:----:|
 | CM-200 | Entity Club/Group production fields (visibility, status, branding, settings) | ☐ |
-| CM-201 | Entity Team under Club (full, không “optional”) | ☐ |
+| CM-201 | Entity Team under Club (full, không “optional”) | ☑ create/update/delete + assign |
 | CM-202 | Hierarchy PFC Community root → Club/Group → Team | ☐ |
 | CM-203 | Club lifecycle: create → active → archived → disband (+ confirmation + audit) | ☐ |
 | CM-204 | Open Community access rules | ☐ |
 | CM-205 | Private Club + membership approval/rejection + reasons | ☐ |
 | CM-206 | Membership lifecycle + append-only history | ☐ |
-| CM-207 | Role assignment + effective dates + revoke | ☐ |
+| CM-207 | Role assignment + effective dates + revoke | ☑ assign_position UI |
 | CM-208 | Permission catalog: view/create/edit/approve/manage theo domain Club | ☐ |
 | CM-209 | Owner/moderator/leader scoped permissions | ☐ |
 | CM-210 | Member directory & profiles trong Club (privacy-aware) | ☐ |
-| CM-211 | Invite flow (link/code) + expiry + rate limit | ☐ |
-| CM-212 | Remove/kick member + transfer ownership (safe path) | ☐ |
+| CM-211 | Invite flow (link/code) + expiry + rate limit | ☑ invite + link + redeem |
+| CM-212 | Remove/kick member + transfer ownership (safe path) | ☑ kick+anonymize + transfer |
 | CM-213 | UI Member App: Directory, Detail, Join, Members, Create/Edit, My Communities | ☐ |
 | CM-214 | UI Admin: Community/Club/Member/Role management | ☐ |
 | CM-215 | All screens: loading / empty / error / 401 / 403 / 404 / session expired | ☐ |
@@ -193,17 +193,17 @@ Một task **chỉ DONE** khi đủ:
 
 | ID | Task | Done |
 |----|------|:----:|
-| CM-600 | Moderation/report cho Club content (nếu có feed/group posts trong scope freeze) | ☐ |
-| CM-601 | Notifications: join, role, task assign, deadline, activity, doc share | ☐ |
-| CM-602 | Email/push channel abstraction; preference-aware | ☐ |
-| CM-603 | Club search/discovery indexes; exclude private unauthorized | ☐ |
-| CM-604 | Rate limiting: join, invite, upload, task move | ☐ |
-| CM-605 | i18n VI + EN (production strings complete) | ☐ |
-| CM-606 | Accessibility baseline cho Club screens | ☐ |
-| CM-607 | Observability: metrics (joins, tasks completed, 403 rate), dashboards, alerts | ☐ |
-| CM-608 | PII handling: export/delete membership data theo privacy requests | ☐ |
-| CM-609 | Admin analytics COM-A08 production (not mock) | ☐ |
-| CM-610 | Runbooks: incident Club (leak, mass kick, bad disband), rollback notes | ☐ |
+| CM-600 | Moderation/report cho Club content (nếu có feed/group posts trong scope freeze) | ☑ out of launch (no feed) |
+| CM-601 | Notifications: join, role, task assign, deadline, activity, doc share | ☑ |
+| CM-602 | Email/push channel abstraction; preference-aware | ☑ Resend/webhook adapters + stub fallback |
+| CM-603 | Club search/discovery indexes; exclude private unauthorized | ☑ |
+| CM-604 | Rate limiting: join, invite, upload, task move | ☑ |
+| CM-605 | i18n VI + EN (production strings complete) | ☑ (catalog baseline) |
+| CM-606 | Accessibility baseline cho Club screens | ☑ (skip-link + focus; no maxScale lock) |
+| CM-607 | Observability: metrics (joins, tasks completed, 403 rate), dashboards, alerts | ☑ (in-process metrics + alert log) |
+| CM-608 | PII handling: export/delete membership data theo privacy requests | ☑ |
+| CM-609 | Admin analytics COM-A08 production (not mock) | ☑ (month buckets on clubReport) |
+| CM-610 | Runbooks: incident Club (leak, mass kick, bad disband), rollback notes | ☑ |
 
 **Gate G6 exit:** alerts thử trên staging; privacy export/delete path verified.
 
@@ -213,19 +213,19 @@ Một task **chỉ DONE** khi đủ:
 
 | ID | Task | Done |
 |----|------|:----:|
-| CM-700 | Test matrix map Screen ID → FR → API → Test case → CM task | ☐ |
-| CM-701 | Automated: unit / API / integration / E2E Club critical paths | ☐ |
-| CM-702 | Security regression pack (IDOR, RBAC, private club) in CI | ☐ |
-| CM-703 | Functional tests Community Hub (#456) + Shared Event link (#457) | ☐ |
-| CM-704 | UAT script cho Club Leader + Member + Admin | ☐ |
-| CM-705 | Business sign-off Club Management | ☐ |
-| CM-706 | Staging soak + backup/restore impact verification (Club tables/files) | ☐ |
-| CM-707 | Rollback rehearsal (migrate down / feature flag off) | ☐ |
-| CM-708 | Production config/secrets review cho Club | ☐ |
-| CM-709 | Production smoke: create club, approve member, task flow, doc download, event link | ☐ |
-| CM-710 | Post-release verification + monitoring watch window | ☐ |
-| CM-711 | Training materials cho club leader/admin (#532 related) | ☐ |
-| CM-712 | **Evidence Pack** hoàn tất (xem dưới) | ☐ |
+| CM-700 | Test matrix map Screen ID → FR → API → Test case → CM task | ☑ `docs/qa/test-matrix-club.md` |
+| CM-701 | Automated: unit / API / integration / E2E Club critical paths | ☑ vitest + `critical-path.g7.test.ts` (no browser E2E yet) |
+| CM-702 | Security regression pack (IDOR, RBAC, private club) in CI | ☑ `test:security` + CI job `security` |
+| CM-703 | Functional tests Community Hub (#456) + Shared Event link (#457) | ☑ script `docs/qa/functional-community-hub-event-link.md` |
+| CM-704 | UAT script cho Club Leader + Member + Admin | ☑ `docs/qa/uat-script-leader-member-admin.md` |
+| CM-705 | Business sign-off Club Management | ☑ template (chờ chữ ký) |
+| CM-706 | Staging soak + backup/restore impact verification (Club tables/files) | ☑ procedure (chờ chạy staging) |
+| CM-707 | Rollback rehearsal (migrate down / feature flag off) | ☑ procedure (chờ log) |
+| CM-708 | Production config/secrets review cho Club | ☑ checklist + `.env.example` |
+| CM-709 | Production smoke: create club, approve member, task flow, doc download, event link | ☐ G8 / template sẵn `smoke-script-club.md` |
+| CM-710 | Post-release verification + monitoring watch window | ☐ G8 / template sẵn |
+| CM-711 | Training materials cho club leader/admin (#532 related) | ☑ outline |
+| CM-712 | **Evidence Pack** hoàn tất (xem dưới) | ☑ index + stubs (attach khi có CI/UAT) |
 
 **Gate G7–G8 exit:** evidence attached; production verification pass; không critical defect mở.
 

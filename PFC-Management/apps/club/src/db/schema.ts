@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 const ts = (name: string) =>
@@ -15,6 +15,15 @@ export const members = sqliteTable("members", {
     .notNull()
     .default(false),
   createdAt: ts("created_at"),
+});
+
+/** ADR-008 — Platform Core SSO subject ↔ Club member */
+export const memberPlatformIds = sqliteTable("member_platform_ids", {
+  memberId: text("member_id")
+    .primaryKey()
+    .references(() => members.id, { onDelete: "cascade" }),
+  platformMemberId: text("platform_member_id").notNull().unique(),
+  linkedAt: ts("linked_at"),
 });
 
 export const clubs = sqliteTable(
@@ -44,10 +53,16 @@ export const teams = sqliteTable(
       .notNull()
       .references(() => clubs.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    /** lower(trim(name)) — unique per club (case-insensitive) */
+    nameNormalized: text("name_normalized"),
     description: text("description").notNull().default(""),
     createdAt: ts("created_at"),
+    updatedAt: ts("updated_at"),
   },
-  (t) => [index("teams_club_idx").on(t.clubId)],
+  (t) => [
+    index("teams_club_idx").on(t.clubId),
+    uniqueIndex("teams_club_name_norm_uidx").on(t.clubId, t.nameNormalized),
+  ],
 );
 
 /** Active membership + history via endedAt / append-only history table */
@@ -66,6 +81,7 @@ export const memberships = sqliteTable(
     teamId: text("team_id").references(() => teams.id),
     effectiveFrom: integer("effective_from", { mode: "timestamp_ms" }),
     effectiveTo: integer("effective_to", { mode: "timestamp_ms" }),
+    joinReason: text("join_reason"),
     rejectReason: text("reject_reason"),
     createdAt: ts("created_at"),
     updatedAt: ts("updated_at"),
@@ -105,8 +121,12 @@ export const tasks = sqliteTable(
       .notNull()
       .references(() => members.id),
     teamId: text("team_id").references(() => teams.id),
+    /** Optional linked Club Activity id (≠ Hub Event — ADR-008). */
+    activityId: text("activity_id"),
     deadline: integer("deadline", { mode: "timestamp_ms" }),
     proofOfWork: text("proof_of_work"),
+    /** 0–100 checklist / manual progress (CM task board) */
+    progress: integer("progress").notNull().default(0),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: ts("created_at"),
     updatedAt: ts("updated_at"),
@@ -115,6 +135,7 @@ export const tasks = sqliteTable(
     index("tasks_club_status_idx").on(t.clubId, t.status),
     index("tasks_assignee_idx").on(t.assigneeId),
     index("tasks_deadline_idx").on(t.deadline),
+    index("tasks_team_idx").on(t.teamId),
   ],
 );
 
@@ -127,10 +148,33 @@ export const taskChecklistItems = sqliteTable(
       .references(() => tasks.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     done: integer("done", { mode: "boolean" }).notNull().default(false),
+    /** Sub-task assignee (member id); null = unassigned action item. */
+    assigneeId: text("assignee_id").references(() => members.id),
+    deadline: integer("deadline", { mode: "timestamp_ms" }),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: ts("created_at"),
   },
-  (t) => [index("checklist_task_idx").on(t.taskId)],
+  (t) => [
+    index("checklist_task_idx").on(t.taskId),
+    index("checklist_assignee_idx").on(t.assigneeId),
+  ],
+);
+
+/** Progress reports / task notes (not social chat — CM-007 out of scope). */
+export const taskComments = sqliteTable(
+  "task_comments",
+  {
+    id: text("id").primaryKey(),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    authorId: text("author_id")
+      .notNull()
+      .references(() => members.id),
+    body: text("body").notNull(),
+    createdAt: ts("created_at"),
+  },
+  (t) => [index("task_comments_task_idx").on(t.taskId, t.createdAt)],
 );
 
 export const activities = sqliteTable(
@@ -142,12 +186,31 @@ export const activities = sqliteTable(
       .references(() => clubs.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     description: text("description").notNull().default(""),
+    /** Plain summary; rich body lives in bodyMd (post-style editor). */
     status: text("status").notNull().default("draft"), // draft|active|completed|archived
+    /** internal = Club Activity; linked = rich post + Shared Event link only */
+    kind: text("kind").notNull().default("internal"), // internal|linked
+    location: text("location"),
+    mode: text("mode").notNull().default("offline"), // offline|online|hybrid
+    coverUrl: text("cover_url"),
+    bodyMd: text("body_md").notNull().default(""),
+    videoUrl: text("video_url"),
+    /** JSON string[] image URLs (gallery; cover = first or coverUrl) */
+    mediaJson: text("media_json").notNull().default("[]"),
+    /** JSON string[] video embed / mp4 URLs */
+    videosJson: text("videos_json").notNull().default("[]"),
+    capacity: integer("capacity"),
+    registerDeadline: integer("register_deadline", { mode: "timestamp_ms" }),
+    hostTeamId: text("host_team_id").references(() => teams.id),
+    /** JSON: { register?: boolean, btc?: boolean, checkin?: boolean } */
+    ctaJson: text("cta_json").notNull().default("{}"),
+    externalEventId: text("external_event_id"),
     ownerId: text("owner_id")
       .notNull()
       .references(() => members.id),
     startsAt: integer("starts_at", { mode: "timestamp_ms" }),
     endsAt: integer("ends_at", { mode: "timestamp_ms" }),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
     createdAt: ts("created_at"),
   },
   (t) => [index("activities_club_idx").on(t.clubId)],
@@ -238,3 +301,71 @@ export const idempotencyKeys = sqliteTable("idempotency_keys", {
   responseJson: text("response_json").notNull(),
   createdAt: ts("created_at"),
 });
+
+/** CM-601 in-app notification inbox */
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: text("id").primaryKey(),
+    recipientId: text("recipient_id")
+      .notNull()
+      .references(() => members.id),
+    clubId: text("club_id").references(() => clubs.id, {
+      onDelete: "set null",
+    }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    payloadJson: text("payload_json"),
+    readAt: integer("read_at", { mode: "timestamp_ms" }),
+    createdAt: ts("created_at"),
+  },
+  (t) => [
+    index("notifications_recipient_idx").on(t.recipientId, t.createdAt),
+    index("notifications_club_idx").on(t.clubId),
+  ],
+);
+
+/** CM-602 channel preferences (email/push stub until Platform Core) */
+export const notificationPreferences = sqliteTable("notification_preferences", {
+  memberId: text("member_id")
+    .primaryKey()
+    .references(() => members.id, { onDelete: "cascade" }),
+  inApp: integer("in_app", { mode: "boolean" }).notNull().default(true),
+  email: integer("email", { mode: "boolean" }).notNull().default(false),
+  push: integer("push", { mode: "boolean" }).notNull().default(false),
+  updatedAt: ts("updated_at"),
+});
+
+/** CM-604 persistent rate-limit windows */
+export const rateLimitBuckets = sqliteTable("rate_limit_buckets", {
+  bucketKey: text("bucket_key").primaryKey(),
+  windowStartMs: integer("window_start_ms").notNull(),
+  count: integer("count").notNull().default(0),
+});
+
+/** CM-211 — invite link / email invite tokens */
+export const clubInviteTokens = sqliteTable(
+  "club_invite_tokens",
+  {
+    id: text("id").primaryKey(),
+    clubId: text("club_id")
+      .notNull()
+      .references(() => clubs.id, { onDelete: "cascade" }),
+    code: text("code").notNull().unique(),
+    kind: text("kind").notNull().default("link"), // link | email
+    email: text("email"),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => members.id),
+    expiresAt: integer("expires_at", { mode: "timestamp_ms" }),
+    maxUses: integer("max_uses"),
+    useCount: integer("use_count").notNull().default(0),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+    createdAt: ts("created_at"),
+  },
+  (t) => [
+    index("club_invite_tokens_club_idx").on(t.clubId),
+    index("club_invite_tokens_code_idx").on(t.code),
+  ],
+);

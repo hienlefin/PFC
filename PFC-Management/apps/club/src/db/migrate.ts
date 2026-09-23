@@ -17,11 +17,43 @@ import {
   idempotencyKeys,
 } from "./schema";
 import { migrateUp } from "./migrator";
+import { normalizeTeamName } from "@/domain/team-policy";
 
 export { migrateUp, migrateDown, appliedMigrationVersions } from "./migrator";
 
+function backfillTeamNameNormalized(): void {
+  const rows = db.select().from(teams).all();
+  for (const t of rows) {
+    const n = normalizeTeamName(t.name);
+    if (t.nameNormalized !== n) {
+      db.update(teams)
+        .set({ nameNormalized: n, updatedAt: new Date() })
+        .where(eq(teams.id, t.id))
+        .run();
+    }
+  }
+}
+
 export async function seedDemo(): Promise<void> {
   migrateUp();
+  backfillTeamNameNormalized();
+  const existing = db.select().from(members).where(eq(members.email, "leader@pfc.vn")).all();
+  if (!existing.length) {
+    await seedFreshClub();
+  }
+  // Always ensure role logins + PM/HR demo packs (idempotent) after migrate
+  const { ensurePmDemoTasks } = await import("@/server/tasks");
+  const { ensureHrDemoMembers } = await import("@/server/clubs");
+  const { ensureRoleDemoAccounts } = await import("./role-demo-accounts");
+  const primary = db.select().from(clubs).all()[0];
+  if (primary) {
+    ensureRoleDemoAccounts(primary.id);
+    ensurePmDemoTasks(primary.id);
+    ensureHrDemoMembers(primary.id);
+  }
+}
+
+async function seedFreshClub(): Promise<void> {
   const existing = db.select().from(members).where(eq(members.email, "leader@pfc.vn")).all();
   if (existing.length) return;
 
@@ -63,13 +95,39 @@ export async function seedDemo(): Promise<void> {
     .run();
 
   const teamId = nanoid();
+  const teamTt = nanoid();
+  const teamSk = nanoid();
+  const now = new Date();
   db.insert(teams)
-    .values({
-      id: teamId,
-      clubId,
-      name: "Ban Chuyen mon",
-      description: "Research & content",
-    })
+    .values([
+      {
+        id: teamId,
+        clubId,
+        name: "Ban Chuyên môn",
+        nameNormalized: normalizeTeamName("Ban Chuyên môn"),
+        description: "Research & content",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: teamTt,
+        clubId,
+        name: "Ban Truyền thông",
+        nameNormalized: normalizeTeamName("Ban Truyền thông"),
+        description: "Media & content",
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: teamSk,
+        clubId,
+        name: "Ban Sự kiện",
+        nameNormalized: normalizeTeamName("Ban Sự kiện"),
+        description: "Events ops",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ])
     .run();
 
   db.insert(memberships)
@@ -124,7 +182,28 @@ export async function seedDemo(): Promise<void> {
       title: "14-Day Spending Challenge",
       description: "Internal campaign (not Shared Event)",
       status: "active",
+      kind: "internal",
+      mode: "hybrid",
+      location: "Online + Phòng CLB",
+      bodyMd:
+        "<h2>Thử thách 14 ngày</h2><p>Theo dõi chi tiêu mỗi ngày, <strong>chia sẻ tip</strong> với ban.</p><ul><li>Ngày 1–7: ghi nhật ký</li><li>Ngày 8–14: tối ưu ngân sách</li></ul><blockquote><p>Hoạt động nội bộ — không phải vé Shared Event.</p></blockquote>",
+      coverUrl: "https://placehold.co/800x420/1e1633/fff?text=14-Day+Challenge",
+      mediaJson: JSON.stringify([
+        "https://placehold.co/800x420/1e1633/fff?text=14-Day+Challenge",
+        "https://placehold.co/400x400/7a6bb0/fff?text=Gallery+1",
+      ]),
+      videoUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      videosJson: JSON.stringify([
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      ]),
+      capacity: 50,
+      registerDeadline: new Date(Date.now() + 1 * 86400000),
+      hostTeamId: teamId,
+      ctaJson: JSON.stringify({ register: true, btc: true, checkin: false }),
       ownerId: leaderId,
+      startsAt: new Date(Date.now() + 2 * 86400000),
+      endsAt: new Date(Date.now() + 16 * 86400000),
+      updatedAt: new Date(),
     })
     .run();
 

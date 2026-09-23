@@ -34,6 +34,8 @@ function actor(
 
 function wipe() {
   sqlite.exec("PRAGMA foreign_keys = OFF");
+  sqlite.exec("DROP TRIGGER IF EXISTS membership_history_no_update");
+  sqlite.exec("DROP TRIGGER IF EXISTS membership_history_no_delete");
   for (const table of [
     "task_checklist_items",
     "tasks",
@@ -51,6 +53,18 @@ function wipe() {
   ]) {
     sqlite.exec(`DELETE FROM ${table}`);
   }
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS membership_history_no_update
+    BEFORE UPDATE ON membership_history
+    BEGIN
+      SELECT RAISE(ABORT, 'membership_history is append-only');
+    END;
+    CREATE TRIGGER IF NOT EXISTS membership_history_no_delete
+    BEFORE DELETE ON membership_history
+    BEGIN
+      SELECT RAISE(ABORT, 'membership_history is append-only');
+    END;
+  `);
   sqlite.exec("PRAGMA foreign_keys = ON");
 }
 
@@ -236,18 +250,25 @@ describe("CM-106 sensitive audit", () => {
     expect(parseMeta(rows[0]).to).toBe("in_progress");
   });
 
-  it("club.transition allow/deny", () => {
+  it("club.transition is NOT_SUPPORTED (ADR-005) with no sensitive audit", () => {
     const w = seed();
-    expect403(() => clubSvc.transitionClubStatus(w.alice, w.clubY, "archived"));
-    expect(listAuditByAction("club.transition")).toHaveLength(1);
-    expect(listAuditByAction("club.transition")[0].result).toBe("deny");
+    try {
+      clubSvc.transitionClubStatus(w.alice, w.clubY, "archived");
+      expect.fail("expected throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).status).toBe(400);
+      expect((err as AppError).code).toBe("NOT_SUPPORTED");
+    }
+    expect(listAuditByAction("club.transition")).toHaveLength(0);
 
-    sqlite.exec("DELETE FROM audit_events");
-    clubSvc.transitionClubStatus(w.bob, w.clubY, "archived");
-    const rows = listAuditByAction("club.transition");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].result).toBe("allow");
-    expect(parseMeta(rows[0]).to).toBe("archived");
+    try {
+      clubSvc.transitionClubStatus(w.bob, w.clubY, "archived");
+      expect.fail("expected throw");
+    } catch (err) {
+      expect((err as AppError).code).toBe("NOT_SUPPORTED");
+    }
+    expect(listAuditByAction("club.transition")).toHaveLength(0);
   });
 
   it("document.soft_delete allow/deny", () => {

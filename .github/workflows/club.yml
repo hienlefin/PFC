@@ -1,0 +1,59 @@
+name: club-management
+
+on:
+  push:
+    paths:
+      - "PFC-Management/apps/club/**"
+      - "PFC-Management/docs/qa/**"
+      - "PFC-Management/docs/adr/**"
+      - "PFC-Management/docs/security/**"
+      - ".github/workflows/club.yml"
+  pull_request:
+    paths:
+      - "PFC-Management/apps/club/**"
+      - "PFC-Management/docs/qa/**"
+      - "PFC-Management/docs/security/**"
+      - ".github/workflows/club.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: PFC-Management/apps/club
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: PFC-Management/apps/club/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Unit / API / integration
+        run: npm test
+      - name: Upload test evidence hint
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: club-ci-meta
+          path: PFC-Management/docs/qa/evidence-pack/EVD-CM-04-test-report.md
+          if-no-files-found: ignore
+
+  security:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: PFC-Management/apps/club
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: PFC-Management/apps/club/package-lock.json
+      - run: npm ci
+      - name: Security regression pack (CM-702)
+        run: npm run test:security
+      - name: G7 critical path
+        run: npm run test:g7

@@ -1,0 +1,127 @@
+openapi: 3.0.3
+info:
+  title: PFC Club Management API
+  version: 0.2.0
+servers:
+  - url: /api/club
+paths:
+  /:
+    get:
+      parameters:
+        - in: query
+          name: action
+          required: true
+          schema:
+            enum:
+              - health
+              - ready
+              - bootstrap
+              - me
+              - clubs
+              - search
+              - home
+              - club
+              - members
+              - tasks
+              - task_detail
+              - checklist
+              - membership_history
+              - report
+              - activities
+              - documents
+              - events
+              - audit
+              - download
+              - notifications
+              - notify_prefs
+              - metrics
+              - i18n
+              - export_pii
+      responses:
+        "200":
+          description: Envelope { ok, correlationId }
+        "401":
+          description: Unauthenticated
+        "403":
+          description: Private club or missing permission
+        "429":
+          description: Rate limited
+        "503":
+          description: Health/ready failed
+    post:
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  enum:
+                    - login
+                    - logout
+                    - run_jobs
+                    - create_club
+                    - join_club
+                    - leave_club
+                    - invite_member
+                    - ensure_invite_link
+                    - rotate_invite_link
+                    - membership_transition
+                    - kick_member
+                    - transfer_owner
+                    - assign_position
+                    - assign_team
+                    - create_team
+                    - update_team
+                    - delete_team
+                    - create_task
+                    - update_task
+                    - assign_task
+                    - cancel_task
+                    - task_transition
+                    - review_task
+                    - attach_proof
+                    - reorder_kanban
+                    - add_checklist
+                    - toggle_checklist
+                    - update_checklist
+                    - delete_checklist
+                    - create_activity
+                    - activity_transition
+                    - register_document
+                    - soft_delete_document
+                    - authorize_download
+                    - link_event
+                    - unlink_event
+                    - club_transition
+                    - mark_notification_read
+                    - mark_all_notifications_read
+                    - update_notify_prefs
+                    - export_pii
+                    - privacy_anonymize
+      responses:
+        "200":
+          description: Success envelope
+        "400":
+          description: SINGLE_CLUB or NOT_SUPPORTED
+        "403":
+          description: Forbidden
+        "429":
+          description: RATE_LIMITED
+x-authz-matrix:
+  member: [view_club, view_members]
+  leader: [approve_memberships, manage_tasks, review_tasks, link_events, view_audit]
+  private_club: "non-member GET detail → 403"
+x-g6:
+  notify: "CM-601/602 in-app + prefs; email/push stub"
+  search: "CM-603 discoverable only"
+  rate_limit: "CM-604 join/upload/task move"
+  privacy: "CM-608 export_pii / privacy_anonymize"
+  metrics: "CM-607 in-process counters"
+  moderation: "CM-600 out of launch (no feed)"

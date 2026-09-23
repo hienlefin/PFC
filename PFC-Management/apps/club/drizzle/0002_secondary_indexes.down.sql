@@ -9,6 +9,7 @@ DROP INDEX IF EXISTS memberships_club_status_idx;
 DROP INDEX IF EXISTS tasks_club_status_idx;
 DROP INDEX IF EXISTS tasks_assignee_idx;
 DROP INDEX IF EXISTS tasks_deadline_idx;
+DROP INDEX IF EXISTS tasks_club_deadline_idx;
 DROP INDEX IF EXISTS checklist_task_idx;
 DROP INDEX IF EXISTS activities_club_idx;
 DROP INDEX IF EXISTS activity_part_idx;

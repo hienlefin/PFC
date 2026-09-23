@@ -2,15 +2,28 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-export default function LoginPage() {
+function LoginInner() {
   const router = useRouter();
+  const search = useSearchParams();
   const [email, setEmail] = useState("leader@pfc.vn");
   const [password, setPassword] = useState("PFC123!");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [ssoEnabled, setSsoEnabled] = useState(false);
+  const [ssoBusy, setSsoBusy] = useState(false);
+
+  useEffect(() => {
+    const code = search.get("sso_error");
+    if (code) setError(`SSO lỗi: ${code}`);
+    void fetch("/api/club?action=sso_status")
+      .then((r) => r.json())
+      .then((d) => setSsoEnabled(!!d.sso?.enabled))
+      .catch(() => setSsoEnabled(false));
+  }, [search]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,6 +43,33 @@ export default function LoginPage() {
     }
     router.push("/");
     router.refresh();
+  }
+
+  async function onSso() {
+    setSsoBusy(true);
+    setError(null);
+    try {
+      await fetch("/api/club?action=bootstrap");
+      const res = await fetch("/api/club", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "sso_start",
+          email,
+          name: "PFC SSO Demo",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.sso?.url) {
+        setError(data.error?.message ?? "Không mở được SSO");
+        setSsoBusy(false);
+        return;
+      }
+      window.location.href = data.sso.url;
+    } catch {
+      setError("SSO không khả dụng");
+      setSsoBusy(false);
+    }
   }
 
   return (
@@ -59,6 +99,18 @@ export default function LoginPage() {
           Đăng nhập vào Personal Finance Club
         </p>
 
+        {ssoEnabled && (
+          <button
+            type="button"
+            className="btn-primary solid"
+            disabled={ssoBusy}
+            onClick={() => void onSso()}
+            style={{ marginBottom: 14 }}
+          >
+            {ssoBusy ? "Đang chuyển SSO…" : "Đăng nhập PFC SSO (Platform Core)"}
+          </button>
+        )}
+
         <form onSubmit={onSubmit}>
           <label className="field">
             Email hoặc số điện thoại
@@ -78,14 +130,25 @@ export default function LoginPage() {
           </label>
           {error && <div className="error-banner">{error}</div>}
           <button className="btn-primary solid" disabled={loading}>
-            {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            {loading ? "Đang đăng nhập..." : "Đăng nhập local"}
           </button>
         </form>
 
         <p className="muted" style={{ marginTop: 16, textAlign: "center" }}>
-          Demo: leader@pfc.vn / member@pfc.vn — PFC123!
+          Demo local: leader@pfc.vn / member@pfc.vn — PFC123!
+          {ssoEnabled
+            ? " · SSO: bật PLATFORM_SSO_MODE=dev + SHARED_SECRET"
+            : " · SSO tắt (Core chưa mở)"}
         </p>
       </div>
     </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<p className="muted">Đang tải...</p>}>
+      <LoginInner />
+    </Suspense>
   );
 }

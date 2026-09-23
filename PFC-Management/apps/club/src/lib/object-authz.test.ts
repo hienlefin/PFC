@@ -48,6 +48,8 @@ function expect403(fn: () => unknown) {
 
 function wipe() {
   sqlite.exec("PRAGMA foreign_keys = OFF");
+  sqlite.exec("DROP TRIGGER IF EXISTS membership_history_no_update");
+  sqlite.exec("DROP TRIGGER IF EXISTS membership_history_no_delete");
   for (const table of [
     "task_checklist_items",
     "tasks",
@@ -65,6 +67,18 @@ function wipe() {
   ]) {
     sqlite.exec(`DELETE FROM ${table}`);
   }
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS membership_history_no_update
+    BEFORE UPDATE ON membership_history
+    BEGIN
+      SELECT RAISE(ABORT, 'membership_history is append-only');
+    END;
+    CREATE TRIGGER IF NOT EXISTS membership_history_no_delete
+    BEFORE DELETE ON membership_history
+    BEGIN
+      SELECT RAISE(ABORT, 'membership_history is append-only');
+    END;
+  `);
   sqlite.exec("PRAGMA foreign_keys = ON");
 }
 

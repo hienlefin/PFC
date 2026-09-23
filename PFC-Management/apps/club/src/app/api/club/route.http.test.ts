@@ -34,7 +34,12 @@ import { GET, POST } from "./route";
 
 function wipe() {
   sqlite.exec("PRAGMA foreign_keys = OFF");
+  sqlite.exec("DROP TRIGGER IF EXISTS membership_history_no_update");
+  sqlite.exec("DROP TRIGGER IF EXISTS membership_history_no_delete");
   for (const table of [
+    "rate_limit_buckets",
+    "notification_preferences",
+    "notifications",
     "task_checklist_items",
     "tasks",
     "membership_history",
@@ -51,6 +56,18 @@ function wipe() {
   ]) {
     sqlite.exec(`DELETE FROM ${table}`);
   }
+  sqlite.exec(`
+    CREATE TRIGGER IF NOT EXISTS membership_history_no_update
+    BEFORE UPDATE ON membership_history
+    BEGIN
+      SELECT RAISE(ABORT, 'membership_history is append-only');
+    END;
+    CREATE TRIGGER IF NOT EXISTS membership_history_no_delete
+    BEFORE DELETE ON membership_history
+    BEGIN
+      SELECT RAISE(ABORT, 'membership_history is append-only');
+    END;
+  `);
   sqlite.exec("PRAGMA foreign_keys = ON");
 }
 
@@ -272,5 +289,54 @@ describe("CM-104 / CM-216 HTTP route + HMAC cookie", () => {
     expect(body.ok).toBe(true);
     expect(typeof body.taskId).toBe("string");
     expect(body.taskId.length).toBeGreaterThan(0);
+  });
+
+  it("GET ready returns health checks without session", async () => {
+    seedHttpWorld();
+    setSession(null);
+    const res = await getAction("ready");
+    expect([200, 503]).toContain(res.status);
+    const body = await res.json();
+    expect(body.checks?.db).toBe(true);
+    expect(Array.isArray(body.checks?.migrations)).toBe(true);
+    expect(body.flags).toBeDefined();
+  });
+
+  it("POST create_club is rejected SINGLE_CLUB", async () => {
+    const w = seedHttpWorld();
+    setSession(w.aliceId);
+    const res = await postAction({ action: "create_club", name: "Nope" });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error?.code).toBe("SINGLE_CLUB");
+  });
+
+  it("G6 GET search does not leak private club to outsider", async () => {
+    const w = seedHttpWorld();
+    setSession(w.outsiderId);
+    const url = new URL("http://localhost/api/club");
+    url.searchParams.set("action", "search");
+    url.searchParams.set("q", "Club");
+    const res = await GET(
+      new Request(url, {
+        headers: { cookie: `${SESSION_COOKIE_NAME}=${cookieJar.value}` },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(
+      (body.clubs as { id: string }[]).some((c) => c.id === w.clubX),
+    ).toBe(false);
+  });
+
+  it("G6 GET notifications returns inbox for session user", async () => {
+    const w = seedHttpWorld();
+    setSession(w.aliceId);
+    const res = await getAction("notifications");
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(Array.isArray(body.notifications)).toBe(true);
   });
 });

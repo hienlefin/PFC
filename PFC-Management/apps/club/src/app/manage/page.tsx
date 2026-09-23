@@ -8,8 +8,15 @@ import { useClubData } from "@/components/useClubData";
 
 export default function ManagePage() {
   const router = useRouter();
-  const { data, error } = useClubData();
+  const { data, error, post } = useClubData();
   const report = data?.report;
+  const [teamName, setTeamName] = useState("");
+  const [teamDesc, setTeamDesc] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const isOwner =
+    data?.myMembership?.position === "owner" || !!data?.user?.isSuperAdmin;
 
   async function signOut() {
     await fetch("/api/club", {
@@ -19,6 +26,37 @@ export default function ManagePage() {
     });
     router.push("/login");
     router.refresh();
+  }
+
+  async function saveTeam(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg(null);
+    try {
+      if (editId) {
+        await post({
+          action: "update_team",
+          teamId: editId,
+          name: teamName,
+          description: teamDesc,
+        });
+        setMsg("Đã cập nhật ban.");
+      } else {
+        await post({
+          action: "create_team",
+          name: teamName,
+          description: teamDesc,
+        });
+        setMsg("Đã tạo ban mới.");
+      }
+      setTeamName("");
+      setTeamDesc("");
+      setEditId(null);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Lỗi");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -57,8 +95,8 @@ export default function ManagePage() {
           <Link href="/members" className="chip">
             Thành viên
           </Link>
-          <Link href="/events" className="chip">
-            Sự kiện
+          <Link href="/manage/teams" className="chip">
+            Ban / Team
           </Link>
           <Link href="/tasks" className="chip">
             Công việc
@@ -87,29 +125,28 @@ export default function ManagePage() {
         )}
 
         <div className="menu-list">
-          <Link href="/members" className="menu-item">
-            <span className="icon">✅</span> Duyệt thành viên
+          <Link href="/manage/queue" className="menu-item">
+            <span className="icon">📥</span> Hàng chờ duyệt
             {!!report?.members.pending && (
               <span className="badge warn" style={{ marginLeft: "auto" }}>
                 {report.members.pending}
               </span>
             )}
           </Link>
+          <Link href="/members" className="menu-item">
+            <span className="icon">✅</span> Duyệt / Mời thành viên
+            {!!report?.members.pending && (
+              <span className="badge warn" style={{ marginLeft: "auto" }}>
+                {report.members.pending}
+              </span>
+            )}
+          </Link>
+          <Link href="/manage/teams" className="menu-item">
+            <span className="icon">🏷️</span> Ban / Team
+          </Link>
           <Link href="/tasks" className="menu-item">
             <span className="icon">🗂️</span> Quản lý công việc
           </Link>
-          <a href="#tai-lieu" className="menu-item">
-            <span className="icon">📄</span> Tài liệu nội bộ
-            <span className="muted" style={{ marginLeft: "auto" }}>
-              {report?.documents ?? 0}
-            </span>
-          </a>
-          <a href="#thong-bao" className="menu-item">
-            <span className="icon">🔔</span> Thông báo CLB
-          </a>
-          <a href="#thong-ke" className="menu-item">
-            <span className="icon">📈</span> Thống kê hoạt động
-          </a>
           <button
             type="button"
             className="menu-item"
@@ -127,11 +164,125 @@ export default function ManagePage() {
           </button>
         </div>
 
-        <div id="thong-bao" className="card" style={{ marginTop: 12 }}>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Thông báo CLB</div>
-          <p className="muted" style={{ margin: 0 }}>
-            Chuông trên header dẫn tới đây. Kênh notify đầy đủ thuộc CM-601.
-          </p>
+        <div id="ban" className="card" style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>Ban trong CLB</div>
+          {(data?.teams?.length ?? 0) === 0 ? (
+            <p className="muted">Chưa có ban.</p>
+          ) : (
+            <div className="stat-grid">
+              {data!.teams.map((t) => {
+                const count =
+                  data?.members.filter((m) => m.teamId === t.id).length ?? 0;
+                return (
+                  <div key={t.id} className="stat-card" style={{ textAlign: "left" }}>
+                    <div className="label">{t.name}</div>
+                    <div className="value" style={{ fontSize: 16 }}>
+                      {count} TV
+                    </div>
+                    {t.description ? (
+                      <div className="muted" style={{ marginTop: 4, fontSize: 11 }}>
+                        {t.description}
+                      </div>
+                    ) : null}
+                    {isOwner && (
+                      <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => {
+                            setEditId(t.id);
+                            setTeamName(t.name);
+                            setTeamDesc(t.description ?? "");
+                          }}
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          onClick={() => {
+                            if (!confirm(`Xóa ban ${t.name}?`)) return;
+                            void post({ action: "delete_team", teamId: t.id }).catch(
+                              (err) =>
+                                setMsg(
+                                  err instanceof Error ? err.message : "Lỗi",
+                                ),
+                            );
+                          }}
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {isOwner && (
+            <form onSubmit={saveTeam} style={{ marginTop: 14 }}>
+              <div style={{ fontWeight: 650, marginBottom: 8 }}>
+                {editId ? "Sửa ban" : "Tạo ban mới"}
+              </div>
+              <input
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                placeholder="Tên ban (vd: Ban Truyền thông)"
+                required
+                style={{
+                  width: "100%",
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid var(--pfc-border)",
+                  font: "inherit",
+                  marginBottom: 8,
+                }}
+              />
+              <input
+                value={teamDesc}
+                onChange={(e) => setTeamDesc(e.target.value)}
+                placeholder="Mô tả ngắn"
+                style={{
+                  width: "100%",
+                  padding: 10,
+                  borderRadius: 10,
+                  border: "1px solid var(--pfc-border)",
+                  font: "inherit",
+                }}
+              />
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button className="btn-primary solid" disabled={busy}>
+                  {editId ? "Lưu" : "Tạo ban"}
+                </button>
+                {editId && (
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    onClick={() => {
+                      setEditId(null);
+                      setTeamName("");
+                      setTeamDesc("");
+                    }}
+                  >
+                    Hủy
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+          <Link
+            href="/manage/teams"
+            className="btn-ghost"
+            style={{ marginTop: 10, display: "inline-block" }}
+          >
+            Mở trang Quản lý Ban →
+          </Link>
+          {msg && (
+            <p className="muted" style={{ marginTop: 8 }}>
+              {msg}
+            </p>
+          )}
         </div>
 
         <DocumentsList documents={data?.documents ?? []} />

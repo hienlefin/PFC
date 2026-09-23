@@ -1,0 +1,14 @@
+---
+description: Mọi session PFC — đọc khung Club trước khi làm; plan khi đụng Club Management.
+alwaysApply: true
+---
+
+# Session start — Club / PFC Hub
+
+Trước khi code hoặc thiết kế:
+
+1. Đọc [`CLUB.md`](../../CLUB.md) (khung, giàn ý, tính xuyên suốt).
+2. Nếu việc thuộc Club / Community ops / `PFC-Management/apps/club`: đọc [`PFC-Management/CLUB_MANAGEMENT_PLAN.md`](../../PFC-Management/CLUB_MANAGEMENT_PLAN.md) và ADR trong `PFC-Management/docs/adr/`.
+3. Có `source/` thì bám SRS FR-CLB + Screen Inventory COM-* + mockup. Không bịa rule.
+
+Club = bounded module, **một** club `pfc-investors`, Activity ≠ Event, Event chỉ link, AuthZ server-side, FSM + audit, UI mobile. Không `create_club`, không microservice, không ticketing trong Club.

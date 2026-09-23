@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { members } from "@/db/schema";
+import { members, memberPlatformIds } from "@/db/schema";
 import { AppError } from "./errors";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
@@ -34,12 +34,12 @@ function sessionMaxAgeSec(): number {
   return Number.isFinite(n) && n > 0 ? n : 60 * 60 * 24 * 7;
 }
 
-export async function login(email: string, password: string): Promise<SessionUser> {
-  const rows = db.select().from(members).where(eq(members.email, email)).all();
-  const user = rows[0];
-  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-    throw new AppError("AUTH_INVALID", "Invalid email or password", 401);
-  }
+async function establishSession(user: {
+  id: string;
+  email: string;
+  fullName: string;
+  isSuperAdmin: boolean;
+}): Promise<SessionUser> {
   const token = signSessionToken({ sub: user.id });
   const jar = await cookies();
   jar.set(SESSION_COOKIE_NAME, token, cookieOptions(sessionMaxAgeSec()));
@@ -49,6 +49,55 @@ export async function login(email: string, password: string): Promise<SessionUse
     fullName: user.fullName,
     isSuperAdmin: user.isSuperAdmin,
   };
+}
+
+export async function login(email: string, password: string): Promise<SessionUser> {
+  const rows = db.select().from(members).where(eq(members.email, email)).all();
+  const user = rows[0];
+  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+    throw new AppError("AUTH_INVALID", "Invalid email or password", 401);
+  }
+  return establishSession(user);
+}
+
+/** ADR-008 — establish session from Platform Core SSO claims (consume, not IdP). */
+export async function loginWithSsoClaims(claims: {
+  sub: string;
+  email: string;
+  name: string;
+}): Promise<SessionUser> {
+  const email = claims.email.trim().toLowerCase();
+  const linked = db
+    .select()
+    .from(memberPlatformIds)
+    .where(eq(memberPlatformIds.platformMemberId, claims.sub))
+    .all()[0];
+
+  let user = linked
+    ? db.select().from(members).where(eq(members.id, linked.memberId)).all()[0]
+    : db.select().from(members).where(eq(members.email, email)).all()[0];
+
+  if (!user) {
+    const id = nanoid();
+    db.insert(members)
+      .values({
+        id,
+        email,
+        fullName: claims.name || email,
+        passwordHash: "!",
+        isSuperAdmin: false,
+      })
+      .run();
+    db.insert(memberPlatformIds)
+      .values({ memberId: id, platformMemberId: claims.sub })
+      .run();
+    user = db.select().from(members).where(eq(members.id, id)).all()[0]!;
+  } else if (!linked) {
+    db.insert(memberPlatformIds)
+      .values({ memberId: user.id, platformMemberId: claims.sub })
+      .run();
+  }
+  return establishSession(user);
 }
 
 export async function logout(): Promise<void> {

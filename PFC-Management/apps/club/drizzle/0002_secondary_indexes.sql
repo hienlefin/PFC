@@ -9,6 +9,7 @@ CREATE INDEX IF NOT EXISTS memberships_club_status_idx ON memberships(club_id, s
 CREATE INDEX IF NOT EXISTS tasks_club_status_idx ON tasks(club_id, status);
 CREATE INDEX IF NOT EXISTS tasks_assignee_idx ON tasks(assignee_id);
 CREATE INDEX IF NOT EXISTS tasks_deadline_idx ON tasks(deadline);
+CREATE INDEX IF NOT EXISTS tasks_club_deadline_idx ON tasks(club_id, deadline);
 CREATE INDEX IF NOT EXISTS checklist_task_idx ON task_checklist_items(task_id);
 CREATE INDEX IF NOT EXISTS activities_club_idx ON activities(club_id);
 CREATE INDEX IF NOT EXISTS activity_part_idx ON activity_participants(activity_id);

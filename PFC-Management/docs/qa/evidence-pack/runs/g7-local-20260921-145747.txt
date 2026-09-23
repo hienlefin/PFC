@@ -1,0 +1,11 @@
+﻿stamp=20260921-145747
+backup=E:\PFC\PFC-Management\apps\club\.data\backups\club-g7-20260921-145747.sqlite
+backup_bytes=376832
+restore_db=E:\PFC\PFC-Management\apps\club\.data\g7-restore-drill.sqlite
+restore_versions=0001_init_club,0002_secondary_indexes,0003_audit_sensitive,0004_membership_p4b,0005_g6_cross_cutting
+tsc=pass
+test_security=Tests  80 passed
+test_g7=Tests  11 passed
+test_all=Tests  118 passed
+rollback_down=0005_g6_cross_cutting
+rollback_up=ok
