@@ -25,9 +25,7 @@ export default function CartPage() {
   const router = useRouter();
   const [cart, setCart] = useState<Cart | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [promo, setPromo] = useState("");
-  const [discount, setDiscount] = useState(0);
-  const [busy, setBusy] = useState(false);
+  const [promo, setPromo] = useState("PFC50K");
 
   async function load() {
     const res = await fetch("/api/cart");
@@ -56,41 +54,6 @@ export default function CartPage() {
     }
     setCart(d.cart);
   }
-
-  function applyPromo() {
-    if (promo.trim().toUpperCase() === "PFC50K") {
-      setDiscount(50000);
-      setError(null);
-    } else if (!promo.trim()) {
-      setDiscount(0);
-    } else {
-      setError("Mã giảm giá không hợp lệ (thử PFC50K)");
-      setDiscount(0);
-    }
-  }
-
-  async function checkout() {
-    setBusy(true);
-    setError(null);
-    const res = await fetch("/api/checkout", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "Idempotency-Key": `ui_${Date.now()}`,
-      },
-      body: JSON.stringify({}),
-    });
-    const data = await res.json();
-    setBusy(false);
-    if (!res.ok) {
-      setError(data.error || "Checkout thất bại");
-      return;
-    }
-    router.push(`/orders/${data.orderId}`);
-  }
-
-  const subtotal = cart?.totalVnd ?? 0;
-  const total = Math.max(0, subtotal - discount);
 
   return (
     <div className="phone-scroll">
@@ -133,12 +96,7 @@ export default function CartPage() {
                     </button>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label="Xóa"
-                  onClick={() => setQty(i.id, 0)}
-                >
+                <button type="button" className="icon-btn" aria-label="Xóa" onClick={() => setQty(i.id, 0)}>
                   🗑️
                 </button>
               </div>
@@ -150,7 +108,13 @@ export default function CartPage() {
                 onChange={(e) => setPromo(e.target.value)}
                 placeholder="Mã giảm giá"
               />
-              <button type="button" onClick={applyPromo}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (promo.trim().toUpperCase() === "PFC50K") setError(null);
+                  else setError("Mã demo: PFC50K (áp dụng ở Checkout)");
+                }}
+              >
                 Áp dụng
               </button>
             </div>
@@ -158,25 +122,22 @@ export default function CartPage() {
             <div className="summary">
               <div className="summary-row">
                 <span>Tạm tính</span>
-                <Money vnd={subtotal} />
-              </div>
-              <div className="summary-row">
-                <span>Giảm giá</span>
-                <span>−{new Intl.NumberFormat("vi-VN").format(discount)}đ</span>
+                <Money vnd={cart.totalVnd} />
               </div>
               <div className="summary-row total">
-                <span>Tổng cộng</span>
-                <Money vnd={total} />
+                <span>Tạm tính giỏ</span>
+                <Money vnd={cart.totalVnd} />
               </div>
             </div>
 
             <button
               className="btn-primary"
               style={{ width: "100%", marginTop: 14 }}
-              disabled={busy}
-              onClick={checkout}
+              onClick={() =>
+                router.push(`/checkout?promo=${encodeURIComponent(promo.trim().toUpperCase())}`)
+              }
             >
-              {busy ? "Đang tạo đơn…" : "Thanh toán"}
+              Thanh toán
             </button>
           </>
         )}

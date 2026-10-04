@@ -5,6 +5,7 @@ Baseline: SRS checklist **#169–#219** · App: `web/` · Gate **9**
 | Wave | Scope | Status |
 |------|--------|--------|
 | P0 Foundation | Seller · Listing FSM · Catalog · Cart · Checkout · Payment port (Mock) · Orders · Audit | Done (`web/`) |
+| P0.1 Checkout UX | Address · shipping/discount · payment method UI · processing · success · order tabs (MKT-12…17 / 61–66) | Done (`web/`) |
 | P1 Commerce harden | VNPAY adapter live · reconcile job · payout eligibility · refund UX · review | Pending credentials / policy |
 | P2 Cross-link | Course↔Education · Event/Ticket↔Shared Event · moderation queues · load tests | Pending sibling modules |
 

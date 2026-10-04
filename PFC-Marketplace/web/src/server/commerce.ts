@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
-import { commercePolicy, splitPayout } from "@/domain/commerce-policy";
+import {
+  commercePolicy,
+  makeOrderCode,
+  resolvePromo,
+  splitPayout,
+} from "@/domain/commerce-policy";
 import { assertListingTransition } from "@/domain/listing-status";
 import { assertOrderTransition } from "@/domain/order-status";
 import { assertPaymentTransition } from "@/domain/payment-status";
@@ -59,9 +64,23 @@ export async function addToCart(memberId: string, listingId: string, quantity: n
   return getOpenCart(memberId);
 }
 
-export async function checkoutCart(memberId: string, idempotencyKey: string) {
-  const existing = await prisma.mktOrder.findUnique({ where: { idempotencyKey } });
+export type CheckoutInput = {
+  idempotencyKey: string;
+  promoCode?: string | null;
+  shipName: string;
+  shipPhone: string;
+  shipAddress: string;
+};
+
+export async function checkoutCart(memberId: string, input: CheckoutInput) {
+  const existing = await prisma.mktOrder.findUnique({
+    where: { idempotencyKey: input.idempotencyKey },
+  });
   if (existing) return existing;
+
+  if (!input.shipName.trim() || !input.shipPhone.trim() || !input.shipAddress.trim()) {
+    throw new Error("Thiếu địa chỉ giao hàng");
+  }
 
   const cart = await getOpenCart(memberId);
   if (!cart.items.length) throw new Error("Cart is empty");
@@ -78,18 +97,29 @@ export async function checkoutCart(memberId: string, idempotencyKey: string) {
     throw new Error("P0 checkout supports one seller per order — tách seller khác sang lần sau");
   }
 
-  const totalVnd = cart.items.reduce((sum, i) => sum + i.listing.priceVnd * i.quantity, 0);
+  const subtotalVnd = cart.items.reduce((sum, i) => sum + i.listing.priceVnd * i.quantity, 0);
+  const hasPhysical = cart.items.some((i) => i.listing.type === "PHYSICAL");
+  const shippingVnd = hasPhysical ? commercePolicy.shippingPhysicalVnd : 0;
+  const discountVnd = Math.min(resolvePromo(input.promoCode), subtotalVnd + shippingVnd);
+  const totalVnd = Math.max(0, subtotalVnd + shippingVnd - discountVnd);
 
   const order = await prisma.$transaction(async (tx) => {
     const created = await tx.mktOrder.create({
       data: {
+        orderCode: makeOrderCode(),
         buyerId: memberId,
         sellerId,
         status: "PENDING_PAYMENT",
+        subtotalVnd,
+        shippingVnd,
+        discountVnd,
         totalVnd,
         commissionBpsApplied: commercePolicy.commissionBps,
         currency: commercePolicy.currency,
-        idempotencyKey,
+        shipName: input.shipName.trim(),
+        shipPhone: input.shipPhone.trim(),
+        shipAddress: input.shipAddress.trim(),
+        idempotencyKey: input.idempotencyKey,
         items: {
           create: cart.items.map((i) => ({
             listingId: i.listingId,
@@ -128,16 +158,42 @@ export async function checkoutCart(memberId: string, idempotencyKey: string) {
     action: "order.created",
     entity: "order",
     entityId: order.id,
-    meta: { totalVnd, idempotencyKey },
+    meta: { totalVnd, orderCode: order.orderCode, idempotencyKey: input.idempotencyKey },
   });
 
   return order;
 }
 
-export async function initiatePayment(orderId: string, memberId: string, returnUrl: string) {
+export async function setOrderPaymentMethod(
+  orderId: string,
+  memberId: string,
+  paymentMethod: string,
+) {
   const order = await prisma.mktOrder.findUnique({ where: { id: orderId } });
   if (!order || order.buyerId !== memberId) throw new Error("Order not found");
   if (order.status !== "PENDING_PAYMENT") throw new Error("Order not payable");
+  return prisma.mktOrder.update({
+    where: { id: orderId },
+    data: { paymentMethod },
+  });
+}
+
+export async function initiatePayment(
+  orderId: string,
+  memberId: string,
+  returnUrl: string,
+  paymentMethod?: string,
+) {
+  const order = await prisma.mktOrder.findUnique({ where: { id: orderId } });
+  if (!order || order.buyerId !== memberId) throw new Error("Order not found");
+  if (order.status !== "PENDING_PAYMENT") throw new Error("Order not payable");
+
+  if (paymentMethod) {
+    await prisma.mktOrder.update({
+      where: { id: orderId },
+      data: { paymentMethod },
+    });
+  }
 
   const gateway = getPaymentGateway();
   const idempotencyKey = `pay_${order.id}_${nanoid(8)}`;

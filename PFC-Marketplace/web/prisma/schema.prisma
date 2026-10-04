@@ -176,16 +176,24 @@ model MktCartItem {
 }
 
 model MktOrder {
-  id                  String      @id @default(cuid())
-  buyerId             String
-  sellerId            String
-  status              OrderStatus @default(PENDING_PAYMENT)
-  totalVnd            Int
+  id                   String      @id @default(cuid())
+  orderCode            String      @unique
+  buyerId              String
+  sellerId             String
+  status               OrderStatus @default(PENDING_PAYMENT)
+  subtotalVnd          Int         @default(0)
+  shippingVnd          Int         @default(0)
+  discountVnd          Int         @default(0)
+  totalVnd             Int
   commissionBpsApplied Int
-  currency            String      @default("VND")
-  idempotencyKey      String      @unique
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
+  currency             String      @default("VND")
+  paymentMethod        String?
+  shipName             String?
+  shipPhone            String?
+  shipAddress          String?
+  idempotencyKey       String      @unique
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
   buyer    Member           @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Cascade)
   seller   MktSellerProfile @relation("SellerOrders", fields: [sellerId], references: [id], onDelete: Cascade)
@@ -196,6 +204,7 @@ model MktOrder {
 
   @@index([buyerId, createdAt])
   @@index([sellerId, status])
+  @@index([status, createdAt])
 }
 
 model MktOrderItem {

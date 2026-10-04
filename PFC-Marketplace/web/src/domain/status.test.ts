@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { canTransitionListing, assertListingTransition } from "./listing-status";
 import { canTransitionOrder } from "./order-status";
 import { canTransitionPayment } from "./payment-status";
-import { splitPayout } from "./commerce-policy";
+import { makeOrderCode, resolvePromo, splitPayout } from "./commerce-policy";
 
 test("listing Draft→Pending→Published", () => {
   assert.equal(canTransitionListing("DRAFT", "PENDING"), true);
@@ -26,4 +26,10 @@ test("payout split uses commission bps", () => {
   const { commissionVnd, netVnd } = splitPayout(100_000, 500);
   assert.equal(commissionVnd, 5000);
   assert.equal(netVnd, 95_000);
+});
+
+test("promo and order code helpers", () => {
+  assert.equal(resolvePromo("pfc50k"), 50000);
+  assert.equal(resolvePromo("NOPE"), 0);
+  assert.match(makeOrderCode(new Date("2026-09-15")), /^PFC260915\d{3}$/);
 });
