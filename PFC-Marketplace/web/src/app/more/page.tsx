@@ -13,6 +13,18 @@ export default function MorePage() {
           <Link href="/orders" className="card">
             Đơn hàng
           </Link>
+          <Link
+            href="/seller/new"
+            className="card"
+            style={{
+              background: "var(--pfc-primary-soft)",
+              borderColor: "var(--pfc-primary)",
+              color: "var(--pfc-primary)",
+              fontWeight: 750,
+            }}
+          >
+            + Thêm sản phẩm
+          </Link>
           <Link href="/seller" className="card">
             Seller Center
           </Link>

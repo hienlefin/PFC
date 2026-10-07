@@ -368,6 +368,8 @@ export async function createListing(
     summary?: string;
     description: string;
     priceVnd: number;
+    compareAtVnd?: number | null;
+    coverTone?: string;
     inventoryQty?: number | null;
     deliveryMeta?: string;
     serviceMeta?: string;
@@ -376,6 +378,11 @@ export async function createListing(
   const seller = await prisma.mktSellerProfile.findUnique({ where: { memberId: sellerMemberId } });
   if (!seller) throw new Error("Not a seller");
   if (input.priceVnd < 0) throw new Error("Invalid price");
+  if (input.compareAtVnd != null && input.compareAtVnd < input.priceVnd) {
+    throw new Error("Giá gốc phải cao hơn giá bán");
+  }
+  const tones = new Set(["violet", "indigo", "plum", "lilac", "berry"]);
+  const coverTone = input.coverTone && tones.has(input.coverTone) ? input.coverTone : "violet";
   const listing = await prisma.mktListing.create({
     data: {
       sellerId: seller.id,
@@ -384,6 +391,8 @@ export async function createListing(
       summary: input.summary,
       description: input.description,
       priceVnd: input.priceVnd,
+      compareAtVnd: input.compareAtVnd ?? null,
+      coverTone,
       inventoryQty: input.inventoryQty ?? null,
       deliveryMeta: input.deliveryMeta,
       serviceMeta: input.serviceMeta,

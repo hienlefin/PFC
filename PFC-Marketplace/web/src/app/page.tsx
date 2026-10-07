@@ -62,9 +62,28 @@ export default function MarketplaceHomePage() {
       <StatusBar />
       <div className="top-row">
         <PfcLogo />
-        <button type="button" className="icon-btn" aria-label="Thông báo">
-          🔔
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Link
+            href="/seller/new"
+            className="icon-btn"
+            aria-label="Thêm sản phẩm"
+            title="Thêm sản phẩm"
+            style={{
+              width: "auto",
+              padding: "0 12px",
+              borderRadius: 999,
+              background: "var(--pfc-primary-soft)",
+              color: "var(--pfc-primary)",
+              fontSize: 13,
+              fontWeight: 750,
+            }}
+          >
+            + Thêm
+          </Link>
+          <button type="button" className="icon-btn" aria-label="Thông báo">
+            🔔
+          </button>
+        </div>
       </div>
 
       <div className="page-pad">

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isUser, requireUser } from "@/lib/auth";
-import { createListing } from "@/server/commerce";
+import { createListing, submitListing } from "@/server/commerce";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -23,9 +23,12 @@ const schema = z.object({
   summary: z.string().optional(),
   description: z.string().min(2),
   priceVnd: z.number().int().min(0),
+  compareAtVnd: z.number().int().min(0).nullable().optional(),
+  coverTone: z.enum(["violet", "indigo", "plum", "lilac", "berry"]).optional(),
   inventoryQty: z.number().int().min(0).nullable().optional(),
   deliveryMeta: z.string().optional(),
   serviceMeta: z.string().optional(),
+  submitForReview: z.boolean().optional(),
 });
 
 export async function POST(req: Request) {
@@ -35,7 +38,11 @@ export async function POST(req: Request) {
   const parsed = schema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   try {
-    const listing = await createListing(user.id, parsed.data);
+    const { submitForReview, ...payload } = parsed.data;
+    let listing = await createListing(user.id, payload);
+    if (submitForReview) {
+      listing = await submitListing(listing.id, user.id);
+    }
     return NextResponse.json({ ok: true, listing });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Failed" }, { status: 400 });
