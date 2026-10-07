@@ -23,7 +23,8 @@ html,
 body {
   margin: 0;
   padding: 0;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
   background: #2a2440;
   color: var(--pfc-text);
   font-family: "SF Pro Display", "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -42,18 +43,24 @@ select {
 }
 
 .phone-shell {
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
   display: flex;
   justify-content: center;
   align-items: stretch;
+  overflow: hidden;
 }
 
 .phone-frame {
   width: 100%;
   max-width: var(--phone-width);
-  min-height: 100dvh;
+  height: 100dvh;
+  max-height: 100dvh;
   background: var(--pfc-bg);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 @media (min-width: 480px) {
@@ -62,25 +69,56 @@ select {
     align-items: center;
   }
   .phone-frame {
-    min-height: min(844px, calc(100dvh - 48px));
+    height: min(844px, calc(100dvh - 48px));
     max-height: min(844px, calc(100dvh - 48px));
     border-radius: 28px;
-    overflow: hidden;
     box-shadow:
       0 25px 50px rgba(0, 0, 0, 0.45),
       0 0 0 1px rgba(255, 255, 255, 0.08);
   }
 }
 
+/* Vùng nội dung cuộn trong khung phone — như app native */
 .phone-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   height: 100%;
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 18px);
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(108, 92, 231, 0.55) rgba(232, 227, 242, 0.9);
+}
+
+.phone-scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.phone-scroll::-webkit-scrollbar-track {
+  background: rgba(232, 227, 242, 0.85);
+  border-radius: 999px;
+  margin: 8px 0 calc(var(--nav-h) + 8px);
+}
+
+.phone-scroll::-webkit-scrollbar-thumb {
+  background: rgba(108, 92, 231, 0.55);
+  border-radius: 999px;
+}
+
+.phone-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(108, 92, 231, 0.8);
 }
 
 .phone-scroll.no-nav {
   padding-bottom: 24px;
+}
+
+.phone-scroll.no-nav::-webkit-scrollbar-track {
+  margin-bottom: 8px;
 }
 
 .status-bar {
