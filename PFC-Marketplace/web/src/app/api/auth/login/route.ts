@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createSession, verifyPassword } from "@/lib/auth";
+import { permissionsForRole } from "@/domain/permissions";
 
 const bodySchema = z.object({
   email: z.string().email(),
@@ -21,6 +22,12 @@ export async function POST(req: Request) {
   await createSession(member.id);
   return NextResponse.json({
     ok: true,
-    user: { id: member.id, email: member.email, name: member.name, role: member.role },
+    user: {
+      id: member.id,
+      email: member.email,
+      name: member.name,
+      role: member.role,
+      permissions: permissionsForRole(member.role),
+    },
   });
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { BottomNav, StatusBar, coverEmoji, typeLabel } from "@/components/ui";
+import { useAuth } from "@/hooks/use-auth";
 
 const TYPES = [
   { value: "PHYSICAL", label: "Sách / vật lý" },
@@ -23,6 +24,7 @@ const TONES = [
 
 export default function NewListingPage() {
   const router = useRouter();
+  const { user, loading: authLoading, can } = useAuth();
   const [type, setType] = useState<(typeof TYPES)[number]["value"]>("PHYSICAL");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -95,6 +97,27 @@ export default function NewListingPage() {
         <p className="page-sub" style={{ marginTop: 0 }}>
           Tạo listing mới cho Seller Center — lưu nháp hoặc gửi duyệt ngay.
         </p>
+
+        {authLoading ? (
+          <p className="muted">Đang kiểm tra quyền…</p>
+        ) : !user ? (
+          <div className="error-banner">
+            Cần đăng nhập.{" "}
+            <Link href="/login" style={{ fontWeight: 700, color: "var(--pfc-danger)" }}>
+              Đăng nhập →
+            </Link>
+          </div>
+        ) : !can("listing.create") ? (
+          <div className="error-banner">
+            Tài khoản <strong>{user.role}</strong> không có quyền thêm sản phẩm. Đăng nhập Seller/Admin
+            hoặc nhờ Admin cấp quyền tại Phân quyền.
+            <div style={{ marginTop: 8 }}>
+              <Link href="/login" style={{ fontWeight: 700, color: "var(--pfc-danger)" }}>
+                Đổi tài khoản →
+              </Link>
+            </div>
+          </div>
+        ) : null}
 
         <div className={`product-cover ${coverTone}`} style={{ height: 120, borderRadius: 16, marginBottom: 14 }}>
           <span style={{ fontSize: 48 }}>{coverEmoji(type)}</span>
@@ -218,7 +241,11 @@ export default function NewListingPage() {
             Gửi duyệt ngay (Pending → Admin)
           </label>
 
-          <button className="btn-primary" style={{ width: "100%" }} disabled={busy}>
+          <button
+            className="btn-primary"
+            style={{ width: "100%" }}
+            disabled={busy || authLoading || !can("listing.create")}
+          >
             {busy ? "Đang lưu…" : submitForReview ? "Thêm & gửi duyệt" : "Lưu nháp"}
           </button>
         </form>

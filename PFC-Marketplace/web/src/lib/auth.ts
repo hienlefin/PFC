@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import type { MemberRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { hasPermission, permissionsForRole, type Permission } from "@/domain/permissions";
 
 const COOKIE = "pfc_mkt_session";
 const SESSION_DAYS = 7;
@@ -13,6 +14,7 @@ export type AuthUser = {
   email: string;
   name: string;
   role: MemberRole;
+  permissions: Permission[];
 };
 
 export function hashPassword(plain: string): string {
@@ -61,6 +63,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     email: session.member.email,
     name: session.member.name,
     role: session.member.role,
+    permissions: permissionsForRole(session.member.role),
   };
 }
 
@@ -75,6 +78,17 @@ export function forbidden(message = "Forbidden") {
 export async function requireUser(): Promise<AuthUser | NextResponse> {
   const user = await getAuthUser();
   if (!user) return unauthorized();
+  return user;
+}
+
+export async function requirePermission(
+  permission: Permission,
+): Promise<AuthUser | NextResponse> {
+  const user = await requireUser();
+  if (!isUser(user)) return user;
+  if (!hasPermission(user.role, permission)) {
+    return forbidden(`Thiếu quyền: ${permission}`);
+  }
   return user;
 }
 

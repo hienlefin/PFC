@@ -10,6 +10,7 @@ import {
   coverEmoji,
   discountPct,
 } from "@/components/ui";
+import { useAuth } from "@/hooks/use-auth";
 
 type Listing = {
   id: string;
@@ -33,6 +34,7 @@ const CATS = [
 ] as const;
 
 export default function MarketplaceHomePage() {
+  const { can } = useAuth();
   const [items, setItems] = useState<Listing[]>([]);
   const [type, setType] = useState("");
   const [q, setQ] = useState("");
@@ -63,23 +65,25 @@ export default function MarketplaceHomePage() {
       <div className="top-row">
         <PfcLogo />
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          <Link
-            href="/seller/new"
-            className="icon-btn"
-            aria-label="Thêm sản phẩm"
-            title="Thêm sản phẩm"
-            style={{
-              width: "auto",
-              padding: "0 12px",
-              borderRadius: 999,
-              background: "var(--pfc-primary-soft)",
-              color: "var(--pfc-primary)",
-              fontSize: 13,
-              fontWeight: 750,
-            }}
-          >
-            + Thêm
-          </Link>
+          {can("listing.create") && (
+            <Link
+              href="/seller/new"
+              className="icon-btn"
+              aria-label="Thêm sản phẩm"
+              title="Thêm sản phẩm"
+              style={{
+                width: "auto",
+                padding: "0 12px",
+                borderRadius: 999,
+                background: "var(--pfc-primary-soft)",
+                color: "var(--pfc-primary)",
+                fontSize: 13,
+                fontWeight: 750,
+              }}
+            >
+              + Thêm
+            </Link>
+          )}
           <button type="button" className="icon-btn" aria-label="Thông báo">
             🔔
           </button>

@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { isUser, requireUser } from "@/lib/auth";
+import { isUser, requirePermission } from "@/lib/auth";
 import { publishListing } from "@/server/commerce";
 
 export async function POST(_: Request, ctx: { params: Promise<{ id: string }> }) {
-  const user = await requireUser();
+  const user = await requirePermission("admin.publish");
   if (!isUser(user)) return user;
-  if (user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await ctx.params;
   try {
     const listing = await publishListing(id, user.id);
