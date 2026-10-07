@@ -37,10 +37,19 @@ async function main() {
 
   await prisma.member.create({
     data: {
-      name: "PFC Admin",
-      email: "admin@pfc.vn",
-      passwordHash: bcrypt.hashSync("Admin-PFC-2026", 12),
-      role: "ADMIN",
+      name: "Le Chu Nhiem",
+      email: "chunhiem@pfc.vn",
+      passwordHash: bcrypt.hashSync("ChuNhiem-PFC-2026", 12),
+      role: "CHU_NHIEM",
+    },
+  });
+
+  await prisma.member.create({
+    data: {
+      name: "Pham Truong CLB",
+      email: "truong@pfc.vn",
+      passwordHash: bcrypt.hashSync("Truong-PFC-2026", 12),
+      role: "TRUONG_CLB",
     },
   });
 

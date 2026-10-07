@@ -19,9 +19,10 @@ Open http://localhost:43211/login
 |------|-------|----------|-------------|
 | Buyer | buyer@pfc.vn | Buyer-PFC-2026 | Mua hàng, giỏ, đơn |
 | Seller | seller@pfc.vn | Seller-PFC-2026 | + Thêm sản phẩm, Seller Center |
-| Admin | admin@pfc.vn | Admin-PFC-2026 | Duyệt listing, **Phân quyền** (`/permissions`) |
+| **Chủ nhiệm CLB** | chunhiem@pfc.vn | ChuNhiem-PFC-2026 | Duyệt listing + **Phân quyền** |
+| **Trưởng CLB** | truong@pfc.vn | Truong-PFC-2026 | Duyệt listing + **Phân quyền** |
 
-RBAC: `src/domain/permissions.ts` — deny by default; API dùng `requirePermission`. Admin đổi role tại More → Phân quyền.
+RBAC: `src/domain/permissions.ts` — deny by default. **Chỉ Chủ nhiệm và Trưởng câu lạc bộ** vào `/permissions` để đổi role.
 
 `PAYMENT_PROVIDER=MOCK` (mặc định). Đặt `VNPAY` chỉ khi đã có `VNPAY_TMN_CODE` + `VNPAY_HASH_SECRET`.
 

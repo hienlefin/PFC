@@ -16,6 +16,23 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/** Chỉ 2 vai trò CLB này được vào màn Phân quyền / đổi role. */
+export const CLUB_LEADERSHIP_ROLES = ["CHU_NHIEM", "TRUONG_CLB"] as const;
+export type ClubLeadershipRole = (typeof CLUB_LEADERSHIP_ROLES)[number];
+
+const LEADERSHIP_PERMS: readonly Permission[] = [
+  "catalog.browse",
+  "cart.manage",
+  "order.buy",
+  "order.view_own",
+  "listing.create",
+  "listing.submit",
+  "seller.console",
+  "admin.queue",
+  "admin.publish",
+  "admin.roles",
+];
+
 const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
   BUYER: [
     "catalog.browse",
@@ -32,25 +49,18 @@ const ROLE_PERMISSIONS: Record<MemberRole, readonly Permission[]> = {
     "listing.submit",
     "seller.console",
   ],
-  ADMIN: [
-    "catalog.browse",
-    "cart.manage",
-    "order.buy",
-    "order.view_own",
-    "listing.create",
-    "listing.submit",
-    "seller.console",
-    "admin.queue",
-    "admin.publish",
-    "admin.roles",
-  ],
+  CHU_NHIEM: LEADERSHIP_PERMS,
+  TRUONG_CLB: LEADERSHIP_PERMS,
 };
 
 export const ROLE_LABELS: Record<MemberRole, string> = {
   BUYER: "Buyer — Người mua",
   SELLER: "Seller — Người bán",
-  ADMIN: "Admin — Quản trị",
+  CHU_NHIEM: "Chủ nhiệm câu lạc bộ",
+  TRUONG_CLB: "Trưởng câu lạc bộ",
 };
+
+export const ALL_ROLES = ["BUYER", "SELLER", "CHU_NHIEM", "TRUONG_CLB"] as const satisfies readonly MemberRole[];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
   "catalog.browse": "Xem catalog / chi tiết sản phẩm",
@@ -62,8 +72,12 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "seller.console": "Seller Center",
   "admin.queue": "Hàng đợi duyệt listing",
   "admin.publish": "Publish listing",
-  "admin.roles": "Phân quyền tài khoản",
+  "admin.roles": "Phân quyền (chỉ Chủ nhiệm / Trưởng CLB)",
 };
+
+export function isClubLeadership(role: MemberRole): boolean {
+  return (CLUB_LEADERSHIP_ROLES as readonly string[]).includes(role);
+}
 
 export function permissionsForRole(role: MemberRole): Permission[] {
   return [...ROLE_PERMISSIONS[role]];
@@ -82,13 +96,15 @@ export function roleMatrix(): Array<{
   label: string;
   BUYER: boolean;
   SELLER: boolean;
-  ADMIN: boolean;
+  CHU_NHIEM: boolean;
+  TRUONG_CLB: boolean;
 }> {
   return PERMISSIONS.map((permission) => ({
     permission,
     label: PERMISSION_LABELS[permission],
     BUYER: hasPermission("BUYER", permission),
     SELLER: hasPermission("SELLER", permission),
-    ADMIN: hasPermission("ADMIN", permission),
+    CHU_NHIEM: hasPermission("CHU_NHIEM", permission),
+    TRUONG_CLB: hasPermission("TRUONG_CLB", permission),
   }));
 }

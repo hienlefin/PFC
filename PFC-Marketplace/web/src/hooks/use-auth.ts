@@ -7,7 +7,7 @@ export type ClientUser = {
   id: string;
   email: string;
   name: string;
-  role: "BUYER" | "SELLER" | "ADMIN";
+  role: "BUYER" | "SELLER" | "CHU_NHIEM" | "TRUONG_CLB";
   permissions: Permission[];
 };
 

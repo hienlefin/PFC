@@ -27,7 +27,7 @@ export default function AdminQueuePage() {
       return;
     }
     if (res.status === 403) {
-      setError("Cần tài khoản Admin (admin@pfc.vn / Admin-PFC-2026)");
+      setError("Cần Chủ nhiệm hoặc Trưởng CLB (chunhiem@pfc.vn / truong@pfc.vn)");
       setLoading(false);
       return;
     }
@@ -82,7 +82,7 @@ export default function AdminQueuePage() {
             {error}
             <div style={{ marginTop: 8 }}>
               <Link href="/login" style={{ color: "var(--pfc-danger)", fontWeight: 700 }}>
-                Đăng nhập Admin →
+                Đăng nhập lãnh đạo CLB →
               </Link>
             </div>
           </div>

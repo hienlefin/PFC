@@ -6,13 +6,16 @@ import { useEffect, useState } from "react";
 import { BottomNav, StatusBar } from "@/components/ui";
 import { ROLE_LABELS, type Permission } from "@/domain/permissions";
 
+type MemberRole = "BUYER" | "SELLER" | "CHU_NHIEM" | "TRUONG_CLB";
+
 type MemberRow = {
   id: string;
   name: string;
   email: string;
-  role: "BUYER" | "SELLER" | "ADMIN";
+  role: MemberRole;
   roleLabel: string;
   permissions: Permission[];
+  isLeadership?: boolean;
   seller?: { displayName: string; verificationTier: string } | null;
 };
 
@@ -21,7 +24,8 @@ type MatrixRow = {
   label: string;
   BUYER: boolean;
   SELLER: boolean;
-  ADMIN: boolean;
+  CHU_NHIEM: boolean;
+  TRUONG_CLB: boolean;
 };
 
 export default function PermissionsPage() {
@@ -43,7 +47,9 @@ export default function PermissionsPage() {
       return;
     }
     if (mRes.status === 403 || pRes.status === 403) {
-      setError("Chỉ Admin mới được phân quyền. Đăng nhập admin@pfc.vn / Admin-PFC-2026");
+      setError(
+        "Phân quyền chỉ dành cho Chủ nhiệm CLB và Trưởng CLB. Đăng nhập chunhiem@pfc.vn hoặc truong@pfc.vn",
+      );
       setLoading(false);
       return;
     }
@@ -62,7 +68,7 @@ export default function PermissionsPage() {
     });
   }, []);
 
-  async function changeRole(memberId: string, role: MemberRow["role"]) {
+  async function changeRole(memberId: string, role: MemberRole) {
     setBusyId(memberId);
     setError(null);
     const res = await fetch("/api/admin/members", {
@@ -91,7 +97,7 @@ export default function PermissionsPage() {
 
       <div className="page-pad">
         <p className="page-sub" style={{ marginTop: 0 }}>
-          RBAC Marketplace — gắn quyền theo vai trò Buyer / Seller / Admin. Deny by default.
+          Chỉ <strong>Chủ nhiệm câu lạc bộ</strong> và <strong>Trưởng câu lạc bộ</strong> được cấp / đổi quyền.
         </p>
 
         {error && (
@@ -99,14 +105,14 @@ export default function PermissionsPage() {
             {error}
             <div style={{ marginTop: 8 }}>
               <Link href="/login" style={{ color: "var(--pfc-danger)", fontWeight: 700 }}>
-                Đăng nhập Admin →
+                Đăng nhập lãnh đạo CLB →
               </Link>
             </div>
           </div>
         )}
 
         <div className="section-head">
-          <h2>Tài khoản</h2>
+          <h2>Thành viên</h2>
         </div>
 
         {loading ? (
@@ -115,7 +121,10 @@ export default function PermissionsPage() {
           <div style={{ display: "grid", gap: 10 }}>
             {members.map((m) => (
               <div key={m.id} className="card">
-                <strong style={{ display: "block" }}>{m.name}</strong>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                  <strong>{m.name}</strong>
+                  {m.isLeadership && <span className="role-pill">CLB</span>}
+                </div>
                 <p className="muted" style={{ margin: "4px 0 10px" }}>
                   {m.email}
                   {m.seller ? ` · Seller: ${m.seller.displayName}` : ""}
@@ -125,11 +134,12 @@ export default function PermissionsPage() {
                   <select
                     value={m.role}
                     disabled={busyId === m.id}
-                    onChange={(e) => changeRole(m.id, e.target.value as MemberRow["role"])}
+                    onChange={(e) => changeRole(m.id, e.target.value as MemberRole)}
                   >
                     <option value="BUYER">{ROLE_LABELS.BUYER}</option>
                     <option value="SELLER">{ROLE_LABELS.SELLER}</option>
-                    <option value="ADMIN">{ROLE_LABELS.ADMIN}</option>
+                    <option value="CHU_NHIEM">{ROLE_LABELS.CHU_NHIEM}</option>
+                    <option value="TRUONG_CLB">{ROLE_LABELS.TRUONG_CLB}</option>
                   </select>
                 </label>
                 <p className="muted" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
@@ -144,28 +154,30 @@ export default function PermissionsPage() {
         <div className="section-head">
           <h2>Ma trận quyền</h2>
         </div>
-        <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="card" style={{ padding: 0, overflowX: "auto" }}>
           <table className="rbac-table">
             <thead>
               <tr>
                 <th>Quyền</th>
                 <th>Buyer</th>
                 <th>Seller</th>
-                <th>Admin</th>
+                <th>Chủ nhiệm</th>
+                <th>Trưởng</th>
               </tr>
             </thead>
             <tbody>
               {matrix.map((row) => (
                 <tr key={row.permission}>
                   <td>
-                    <div style={{ fontWeight: 650, fontSize: 12 }}>{row.label}</div>
+                    <div style={{ fontWeight: 650, fontSize: 11 }}>{row.label}</div>
                     <div className="muted" style={{ fontSize: 10 }}>
                       {row.permission}
                     </div>
                   </td>
                   <td>{row.BUYER ? "✓" : "—"}</td>
                   <td>{row.SELLER ? "✓" : "—"}</td>
-                  <td>{row.ADMIN ? "✓" : "—"}</td>
+                  <td>{row.CHU_NHIEM ? "✓" : "—"}</td>
+                  <td>{row.TRUONG_CLB ? "✓" : "—"}</td>
                 </tr>
               ))}
             </tbody>

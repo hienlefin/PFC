@@ -21,10 +21,17 @@ const DEMOS = [
     next: "/seller/new",
   },
   {
-    role: "ADMIN",
-    label: "Admin — phân quyền",
-    email: "admin@pfc.vn",
-    password: "Admin-PFC-2026",
+    role: "CHU_NHIEM",
+    label: "Chủ nhiệm CLB — phân quyền",
+    email: "chunhiem@pfc.vn",
+    password: "ChuNhiem-PFC-2026",
+    next: "/permissions",
+  },
+  {
+    role: "TRUONG_CLB",
+    label: "Trưởng CLB — phân quyền",
+    email: "truong@pfc.vn",
+    password: "Truong-PFC-2026",
     next: "/permissions",
   },
 ] as const;
@@ -53,9 +60,7 @@ export default function LoginPage() {
       return;
     }
     const role = data.user?.role as string | undefined;
-    const dest =
-      DEMOS.find((d) => d.role === role)?.next ||
-      fallbackPath;
+    const dest = DEMOS.find((d) => d.role === role)?.next || fallbackPath;
     router.push(dest);
     router.refresh();
   }
@@ -76,7 +81,7 @@ export default function LoginPage() {
           Chào mừng trở lại!
         </h1>
         <p className="page-sub" style={{ textAlign: "center" }}>
-          Đăng nhập để dùng Thêm sản phẩm & Phân quyền trong app
+          Phân quyền chỉ dành cho Chủ nhiệm &amp; Trưởng câu lạc bộ
         </p>
         <form className="card" onSubmit={onSubmit}>
           {error && <div className="error-banner">{error}</div>}
@@ -113,7 +118,7 @@ export default function LoginPage() {
                 <strong>{d.label}</strong>
                 <span>{d.email}</span>
               </span>
-              <em>{d.role}</em>
+              <em>{d.role === "CHU_NHIEM" ? "CN" : d.role === "TRUONG_CLB" ? "Trưởng" : d.role}</em>
             </button>
           ))}
         </div>

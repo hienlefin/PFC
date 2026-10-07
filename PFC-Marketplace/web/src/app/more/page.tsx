@@ -92,7 +92,7 @@ export default function MorePage() {
                     fontWeight: 750,
                   }}
                 >
-                  Phân quyền — đổi role Buyer/Seller/Admin
+                  Phân quyền — chỉ Chủ nhiệm / Trưởng CLB
                 </Link>
               )}
             </div>

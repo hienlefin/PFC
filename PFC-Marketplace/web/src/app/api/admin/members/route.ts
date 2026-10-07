@@ -4,7 +4,12 @@ import type { MemberRole } from "@prisma/client";
 import { isUser, requirePermission } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeAudit } from "@/lib/audit";
-import { permissionsForRole, ROLE_LABELS } from "@/domain/permissions";
+import {
+  ALL_ROLES,
+  isClubLeadership,
+  permissionsForRole,
+  ROLE_LABELS,
+} from "@/domain/permissions";
 
 export async function GET() {
   const user = await requirePermission("admin.roles");
@@ -27,26 +32,34 @@ export async function GET() {
       ...m,
       roleLabel: ROLE_LABELS[m.role],
       permissions: permissionsForRole(m.role),
+      isLeadership: isClubLeadership(m.role),
     })),
+    note: "Phân quyền chỉ dành cho Chủ nhiệm CLB và Trưởng CLB",
   });
 }
 
 const patchSchema = z.object({
   memberId: z.string().min(1),
-  role: z.enum(["BUYER", "SELLER", "ADMIN"]),
+  role: z.enum(ALL_ROLES),
 });
 
 export async function PATCH(req: Request) {
   const user = await requirePermission("admin.roles");
   if (!isUser(user)) return user;
+  if (!isClubLeadership(user.role)) {
+    return NextResponse.json(
+      { error: "Chỉ Chủ nhiệm hoặc Trưởng câu lạc bộ được phân quyền" },
+      { status: 403 },
+    );
+  }
 
   const parsed = patchSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
   const { memberId, role } = parsed.data;
-  if (memberId === user.id && role !== "ADMIN") {
+  if (memberId === user.id && !isClubLeadership(role as MemberRole)) {
     return NextResponse.json(
-      { error: "Không thể tự hạ quyền Admin của chính mình" },
+      { error: "Không thể tự hạ quyền Chủ nhiệm / Trưởng CLB của chính mình" },
       { status: 400 },
     );
   }
@@ -60,15 +73,15 @@ export async function PATCH(req: Request) {
       data: { role: role as MemberRole },
     });
 
-    if (role === "SELLER") {
+    if (role === "SELLER" || isClubLeadership(role as MemberRole)) {
       const existing = await tx.mktSellerProfile.findUnique({ where: { memberId } });
       if (!existing) {
         await tx.mktSellerProfile.create({
           data: {
             memberId,
             displayName: member.name,
-            verificationTier: "UNVERIFIED",
-            payoutEligible: false,
+            verificationTier: isClubLeadership(role as MemberRole) ? "TRUSTED" : "UNVERIFIED",
+            payoutEligible: isClubLeadership(role as MemberRole),
           },
         });
       }
@@ -82,7 +95,7 @@ export async function PATCH(req: Request) {
     action: "rbac.role_changed",
     entity: "member",
     entityId: memberId,
-    meta: { from: target.role, to: role },
+    meta: { from: target.role, to: role, byLeadership: user.role },
   });
 
   return NextResponse.json({

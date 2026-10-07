@@ -9,7 +9,7 @@ export async function POST(_: Request, ctx: { params: Promise<{ id: string }> })
   try {
     const order = await markOrderCompleted(id, user.id, {
       asSeller: user.role === "SELLER",
-      asAdmin: user.role === "ADMIN",
+      asAdmin: user.role === "CHU_NHIEM" || user.role === "TRUONG_CLB",
     });
     return NextResponse.json({ ok: true, order });
   } catch (e) {

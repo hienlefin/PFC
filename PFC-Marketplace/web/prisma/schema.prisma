@@ -10,7 +10,10 @@ datasource db {
 enum MemberRole {
   BUYER
   SELLER
-  ADMIN
+  /// Chủ nhiệm câu lạc bộ — được phân quyền
+  CHU_NHIEM
+  /// Trưởng câu lạc bộ — được phân quyền
+  TRUONG_CLB
 }
 
 enum SellerTier {
