@@ -5,6 +5,30 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PfcLogo, StatusBar } from "@/components/ui";
 
+const DEMOS = [
+  {
+    role: "BUYER",
+    label: "Buyer — mua hàng",
+    email: "buyer@pfc.vn",
+    password: "Buyer-PFC-2026",
+    next: "/",
+  },
+  {
+    role: "SELLER",
+    label: "Seller — thêm sản phẩm",
+    email: "seller@pfc.vn",
+    password: "Seller-PFC-2026",
+    next: "/seller/new",
+  },
+  {
+    role: "ADMIN",
+    label: "Admin — phân quyền",
+    email: "admin@pfc.vn",
+    password: "Admin-PFC-2026",
+    next: "/permissions",
+  },
+] as const;
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("buyer@pfc.vn");
@@ -12,14 +36,15 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function loginAs(nextEmail: string, nextPassword: string, fallbackPath = "/") {
     setLoading(true);
     setError(null);
+    setEmail(nextEmail);
+    setPassword(nextPassword);
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: nextEmail, password: nextPassword }),
     });
     const data = await res.json();
     setLoading(false);
@@ -27,8 +52,17 @@ export default function LoginPage() {
       setError(data.error ?? "Đăng nhập thất bại");
       return;
     }
-    router.push("/");
+    const role = data.user?.role as string | undefined;
+    const dest =
+      DEMOS.find((d) => d.role === role)?.next ||
+      fallbackPath;
+    router.push(dest);
     router.refresh();
+  }
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await loginAs(email, password, "/");
   }
 
   return (
@@ -42,7 +76,7 @@ export default function LoginPage() {
           Chào mừng trở lại!
         </h1>
         <p className="page-sub" style={{ textAlign: "center" }}>
-          Đăng nhập vào Personal Finance Club Marketplace
+          Đăng nhập để dùng Thêm sản phẩm & Phân quyền trong app
         </p>
         <form className="card" onSubmit={onSubmit}>
           {error && <div className="error-banner">{error}</div>}
@@ -62,14 +96,31 @@ export default function LoginPage() {
             {loading ? "Đang đăng nhập…" : "Đăng nhập"}
           </button>
         </form>
-        <p className="muted" style={{ textAlign: "center", marginTop: 14 }}>
-          Demo: buyer@pfc.vn / seller@pfc.vn / admin@pfc.vn
-          <br />
-          Buyer-PFC-2026 · Seller-PFC-2026 · Admin-PFC-2026
+
+        <p className="muted" style={{ marginTop: 16, marginBottom: 8, fontWeight: 700, color: "var(--pfc-text)" }}>
+          Vào nhanh theo vai trò
         </p>
-        <p style={{ textAlign: "center" }}>
+        <div className="demo-accounts">
+          {DEMOS.map((d) => (
+            <button
+              key={d.role}
+              type="button"
+              className="demo-account-btn"
+              disabled={loading}
+              onClick={() => loginAs(d.email, d.password, d.next)}
+            >
+              <span>
+                <strong>{d.label}</strong>
+                <span>{d.email}</span>
+              </span>
+              <em>{d.role}</em>
+            </button>
+          ))}
+        </div>
+
+        <p style={{ textAlign: "center", marginTop: 16 }}>
           <Link href="/" style={{ color: "var(--pfc-primary)", fontWeight: 650 }}>
-            Xem Marketplace
+            Xem Marketplace không đăng nhập
           </Link>
         </p>
       </div>

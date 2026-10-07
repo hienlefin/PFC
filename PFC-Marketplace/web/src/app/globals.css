@@ -630,3 +630,107 @@ select {
 .rbac-table tr:last-child td {
   border-bottom: none;
 }
+
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  background: var(--pfc-primary-soft);
+  color: var(--pfc-primary);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.role-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 8px 16px 0;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #fff;
+  border: 1px solid var(--pfc-border);
+  text-decoration: none;
+  color: inherit;
+}
+
+.role-banner.in {
+  background: linear-gradient(135deg, #f4f0ff, #ffffff);
+  border-color: #ddd4ff;
+}
+
+.role-banner-cta {
+  flex-shrink: 0;
+  background: var(--pfc-primary);
+  color: #fff;
+  font-weight: 750;
+  font-size: 12px;
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+.role-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.role-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 750;
+  border: 1px solid var(--pfc-border);
+  background: #fff;
+  color: var(--pfc-text);
+  white-space: nowrap;
+}
+
+.role-chip.primary {
+  background: var(--pfc-primary);
+  border-color: var(--pfc-primary);
+  color: #fff;
+}
+
+.demo-accounts {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.demo-account-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  border: 1px solid var(--pfc-border);
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--pfc-text);
+}
+
+.demo-account-btn strong {
+  display: block;
+  font-size: 14px;
+}
+
+.demo-account-btn span {
+  font-size: 12px;
+  color: var(--pfc-muted);
+}
+
+.demo-account-btn em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--pfc-primary);
+}

@@ -6,6 +6,7 @@ import {
   BottomNav,
   Money,
   PfcLogo,
+  RoleBanner,
   StatusBar,
   coverEmoji,
   discountPct,
@@ -84,11 +85,32 @@ export default function MarketplaceHomePage() {
               + Thêm
             </Link>
           )}
+          {can("admin.roles") && (
+            <Link
+              href="/permissions"
+              className="icon-btn"
+              aria-label="Phân quyền"
+              title="Phân quyền"
+              style={{
+                width: "auto",
+                padding: "0 12px",
+                borderRadius: 999,
+                background: "var(--pfc-primary)",
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 750,
+              }}
+            >
+              Quyền
+            </Link>
+          )}
           <button type="button" className="icon-btn" aria-label="Thông báo">
             🔔
           </button>
         </div>
       </div>
+
+      <RoleBanner />
 
       <div className="page-pad">
         <h1 className="page-title">Marketplace</h1>
